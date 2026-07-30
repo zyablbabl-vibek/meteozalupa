@@ -1,4 +1,5 @@
 export type Horizon = "today" | "3d" | "7d";
+export type Section = "temperature" | "precipitation" | "wind";
 export type ModelValues = Record<string, number | null>;
 export type Statistics = {
   count: number;
@@ -12,6 +13,7 @@ export type Statistics = {
   maximum_source?: string;
   range?: number;
   standard_deviation?: number;
+  agreement?: string;
 };
 export type Point = {
   id: string;
@@ -35,6 +37,42 @@ export type PointSummary = {
   pressure: Statistics;
   max_gust: number | null;
   max_gust_source?: string;
+  precipitation_analysis: {
+    daily_total: Statistics & { model_values: ModelValues };
+    relative_spread_pct: number | null;
+    hourly_peak: Statistics;
+    peak_time: string | null;
+    peak_model: string | null;
+    peak_value: number | null;
+    event_start: string | null;
+    event_end: string | null;
+    duration_hours: number;
+    event_count: number;
+    hours_above_threshold: number;
+    confirming_models: number;
+    start_time_disagreement_hours: number | null;
+  };
+  wind_analysis: {
+    mean_speed: Statistics & { model_values: ModelValues };
+    maximum_speed: Statistics & { model_values: ModelValues };
+    maximum_gust: Statistics & { model_values: ModelValues };
+    maximum_gust_time: string | null;
+    maximum_gust_model: string | null;
+    maximum_gust_value: number | null;
+    circular_mean_direction_deg: number | null;
+    direction_label: string | null;
+    directions_by_model: ModelValues;
+    direction_labels_by_model: Record<string, string | null>;
+    maximum_direction_disagreement_deg: number | null;
+    direction_disagreement_models: string[];
+    direction_agreement: string;
+    maximum_direction_change_deg?: number | null;
+    direction_change_start?: string | null;
+    direction_change_end?: string | null;
+    strong_wind_start: string | null;
+    strong_wind_end: string | null;
+    strong_wind_duration_hours: number;
+  };
   incomplete: boolean;
 };
 export type Hourly = {
@@ -123,4 +161,27 @@ export type PointForecast = {
   daily_aggregates: Array<Record<string, string | number | null>>;
   period_summary: PeriodSummary;
   warnings: string[];
+};
+export type WeatherInsight = {
+  category: "precipitation" | "wind";
+  severity: "info" | "attention" | "notable";
+  reason_code: string;
+  title: string;
+  description: string;
+  explanation: string;
+  period_start: string | null;
+  period_end: string | null;
+  point_id: string | null;
+  point_name: string | null;
+  models: string[];
+  values: Record<string, string | number | null>;
+};
+export type InsightsResponse = {
+  horizon: Horizon;
+  period_start: string;
+  period_end: string;
+  selected_date: string;
+  disclaimer: string;
+  precipitation: { items: WeatherInsight[]; total: number };
+  wind: { items: WeatherInsight[]; total: number };
 };

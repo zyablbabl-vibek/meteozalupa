@@ -18,6 +18,13 @@ from app.providers.icon import IconProvider
 from app.schemas.forecast import FIELD_BY_METRIC, ForecastRecord, Point
 from app.services.horizons import current_local_date, filter_dates
 from app.statistics.core import agreement, circular_mean, numeric_consensus
+from app.statistics.events import (
+    angular_distance,
+    direction_label,
+    event_periods,
+    maximum_angular_disagreement,
+    relative_spread,
+)
 
 LOCAL_TZ = ZoneInfo("Asia/Yakutsk")
 MODEL_LABELS = tuple(model.label for model in MODELS.values())
@@ -180,6 +187,19 @@ DAILY_OPERATIONS = {
     "wind_gust_max": ("wind_gusts_10m_ms", "max"),
     "wind_direction_circular_mean": ("wind_direction_10m_deg", "circular"),
 }
+AGREEMENT_METRIC_BY_DAILY = {
+    "temperature_min": "temperature_2m",
+    "temperature_max": "temperature_2m",
+    "temperature_mean": "temperature_2m",
+    "precipitation_sum": "precipitation",
+    "humidity_mean": "relative_humidity_2m",
+    "pressure_mean": "pressure_msl",
+    "cloud_cover_mean": "cloud_cover",
+    "wind_speed_mean": "wind_speed_10m",
+    "wind_speed_max": "wind_speed_10m",
+    "wind_gust_max": "wind_gusts_10m",
+    "wind_direction_circular_mean": "wind_direction_10m",
+}
 
 
 def daily_model_aggregates(records: list[ForecastRecord]) -> list[dict]:
@@ -206,22 +226,159 @@ def daily_model_aggregates(records: list[ForecastRecord]) -> list[dict]:
     return sorted(result, key=lambda item: (item["date"], item["point_id"], item["model"]))
 
 
+def precipitation_analysis(records: list[ForecastRecord], daily_total: dict) -> dict:
+    hourly_rows = hourly(records, "precipitation")
+    peak_record = max(
+        (record for record in records if record.precipitation_mm is not None),
+        key=lambda record: (
+            record.precipitation_mm if record.precipitation_mm is not None else -math.inf
+        ),
+        default=None,
+    )
+    peak_row = next(
+        (
+            row
+            for row in hourly_rows
+            if peak_record is not None and row["forecast_time_utc"] == peak_record.forecast_time_utc
+        ),
+        None,
+    )
+    timeline = [(row["forecast_time_local"], row["statistics"].get("mean")) for row in hourly_rows]
+    periods = event_periods(timeline, settings.precipitation_event_threshold_mm)
+    longest = max(periods, key=lambda item: item["duration_hours"], default=None)
+    starts_by_model = {}
+    for model in MODEL_LABELS:
+        first = next(
+            (
+                record.forecast_time_local
+                for record in sorted(records, key=lambda item: item.forecast_time_local)
+                if record.model == model
+                and record.precipitation_mm is not None
+                and record.precipitation_mm >= settings.precipitation_event_threshold_mm
+            ),
+            None,
+        )
+        starts_by_model[model] = first
+    valid_starts = [value for value in starts_by_model.values() if value is not None]
+    start_disagreement = (
+        (max(valid_starts) - min(valid_starts)).total_seconds() / 3600
+        if len(valid_starts) >= 2
+        else None
+    )
+    return {
+        "daily_total": daily_total,
+        "relative_spread_pct": relative_spread(daily_total.get("mean"), daily_total.get("range")),
+        "hourly_peak": peak_row["statistics"] if peak_row else {},
+        "peak_time": peak_record.forecast_time_local if peak_record else None,
+        "peak_model": peak_record.model if peak_record else None,
+        "peak_value": peak_record.precipitation_mm if peak_record else None,
+        "event_start": longest["start"] if longest else None,
+        "event_end": longest["end"] if longest else None,
+        "duration_hours": longest["duration_hours"] if longest else 0,
+        "event_count": len(periods),
+        "hours_above_threshold": sum(
+            1
+            for _, value in timeline
+            if value is not None and value >= settings.precipitation_event_threshold_mm
+        ),
+        "confirming_models": sum(
+            1
+            for value in daily_total_model_values(daily_total).values()
+            if value is not None and value >= settings.precipitation_event_threshold_mm
+        ),
+        "starts_by_model": starts_by_model,
+        "start_time_disagreement_hours": start_disagreement,
+    }
+
+
+def daily_total_model_values(stats: dict) -> dict[str, float | None]:
+    return stats.get("model_values", {})
+
+
+def wind_analysis(records: list[ForecastRecord], rows: list[dict], by_metric: dict) -> dict:
+    directions = {
+        model: next(
+            (row["wind_direction_circular_mean"] for row in rows if row["model"] == model),
+            None,
+        )
+        for model in MODEL_LABELS
+    }
+    circular = circular_mean(value for value in directions.values() if value is not None)
+    disagreement = maximum_angular_disagreement(directions)
+    peak_record = max(
+        (record for record in records if record.wind_gusts_10m_ms is not None),
+        key=lambda record: (
+            record.wind_gusts_10m_ms if record.wind_gusts_10m_ms is not None else -math.inf
+        ),
+        default=None,
+    )
+    speed_rows = hourly(records, "wind_speed_10m")
+    timeline = [(row["forecast_time_local"], row["statistics"].get("mean")) for row in speed_rows]
+    periods = event_periods(timeline, settings.wind_speed_attention_ms)
+    longest = max(periods, key=lambda item: item["duration_hours"], default=None)
+    direction_rows = hourly(records, "wind_direction_10m")
+    hourly_directions = [
+        (row["forecast_time_local"], row["statistics"].get("mean"))
+        for row in direction_rows
+        if row["statistics"].get("mean") is not None
+    ]
+    direction_changes = [
+        {
+            "value": angular_distance(previous[1], current[1]),
+            "start": previous[0],
+            "end": current[0],
+        }
+        for previous, current in zip(hourly_directions, hourly_directions[1:], strict=False)
+    ]
+    largest_change = max(direction_changes, key=lambda item: item["value"], default=None)
+    return {
+        "mean_speed": by_metric["wind_speed_mean"],
+        "maximum_speed": by_metric["wind_speed_max"],
+        "maximum_gust": by_metric["wind_gust_max"],
+        "maximum_gust_time": peak_record.forecast_time_local if peak_record else None,
+        "maximum_gust_model": peak_record.model if peak_record else None,
+        "maximum_gust_value": peak_record.wind_gusts_10m_ms if peak_record else None,
+        "circular_mean_direction_deg": circular,
+        "direction_label": direction_label(circular),
+        "directions_by_model": directions,
+        "direction_labels_by_model": {
+            model: direction_label(value) for model, value in directions.items()
+        },
+        "maximum_direction_disagreement_deg": disagreement["value"],
+        "direction_disagreement_models": disagreement["models"],
+        "direction_agreement": agreement("wind_direction_10m", disagreement["value"]),
+        "maximum_direction_change_deg": (largest_change["value"] if largest_change else None),
+        "direction_change_start": largest_change["start"] if largest_change else None,
+        "direction_change_end": largest_change["end"] if largest_change else None,
+        "strong_wind_start": longest["start"] if longest else None,
+        "strong_wind_end": longest["end"] if longest else None,
+        "strong_wind_duration_hours": longest["duration_hours"] if longest else 0,
+        "strong_wind_event_count": len(periods),
+    }
+
+
 def point_summaries(records: list[ForecastRecord]) -> list[dict]:
     aggregates = daily_model_aggregates(records)
     output = []
     for point in points():
+        point_records = [record for record in records if record.point_id == point.id]
         rows = [row for row in aggregates if row["point_id"] == point.id]
         if not rows:
             continue
-        by_metric = {
-            metric: numeric_consensus(
-                {
-                    model: next((row[metric] for row in rows if row["model"] == model), None)
-                    for model in MODEL_LABELS
-                }
+        by_metric = {}
+        for metric in DAILY_OPERATIONS:
+            model_values = {
+                model: next((row[metric] for row in rows if row["model"] == model), None)
+                for model in MODEL_LABELS
+            }
+            by_metric[metric] = {
+                **numeric_consensus(model_values),
+                "model_values": model_values,
+            }
+            by_metric[metric]["agreement"] = agreement(
+                AGREEMENT_METRIC_BY_DAILY[metric],
+                by_metric[metric].get("range"),
             )
-            for metric in DAILY_OPERATIONS
-        }
         temp_mean = by_metric["temperature_mean"]
         temp_min = by_metric["temperature_min"]
         temp_max = by_metric["temperature_max"]
@@ -254,6 +411,10 @@ def point_summaries(records: list[ForecastRecord]) -> list[dict]:
                 "pressure": by_metric["pressure_mean"],
                 "max_gust": by_metric["wind_gust_max"].get("maximum"),
                 "max_gust_source": by_metric["wind_gust_max"].get("maximum_source"),
+                "precipitation_analysis": precipitation_analysis(
+                    point_records, by_metric["precipitation_sum"]
+                ),
+                "wind_analysis": wind_analysis(point_records, rows, by_metric),
                 "daily_aggregates": by_metric,
                 "incomplete": any(not stats.get("complete", False) for stats in by_metric.values()),
             }

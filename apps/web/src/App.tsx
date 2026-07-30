@@ -1,27 +1,42 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { getForecast, getPointForecast, refreshForecast } from "./api/weather";
+import {
+  getForecast,
+  getInsights,
+  getPointForecast,
+  refreshForecast,
+} from "./api/weather";
 import { DayCards } from "./components/DayCards";
 import { HorizonControl } from "./components/HorizonControl";
+import { InsightsPanel } from "./components/InsightsPanel";
 import { PeriodOverview } from "./components/PeriodOverview";
 import { PointDetails } from "./components/PointDetails";
 import { PointsTable } from "./components/PointsTable";
+import { PrecipitationTable } from "./components/PrecipitationTable";
+import { SectionControl } from "./components/SectionControl";
 import { WeatherMap } from "./components/WeatherMap";
-import type { Horizon } from "./types/weather";
+import { WindTable } from "./components/WindTable";
+import type { Horizon, Section } from "./types/weather";
 import { localDate, number, temperature } from "./utils/format";
 import { forecastUrl, readForecastUrl } from "./utils/urlState";
 
 type View = "day" | "period";
 
-function writeUrl(horizon: Horizon, date: string, replace = false) {
+function writeUrl(
+  horizon: Horizon,
+  date: string,
+  section: Section,
+  replace = false,
+) {
   const method = replace ? "replaceState" : "pushState";
-  window.history[method](null, "", forecastUrl(horizon, date));
+  window.history[method](null, "", forecastUrl(horizon, date, section));
 }
 
 export default function App() {
   const initial = readForecastUrl();
   const [horizon, setHorizon] = useState<Horizon>(initial.horizon);
   const [date, setDate] = useState(initial.date);
+  const [section, setSection] = useState<Section>(initial.section);
   const [view, setView] = useState<View>("day");
   const [selected, setSelected] = useState<string | null>(null);
   const queryClient = useQueryClient();
@@ -31,6 +46,7 @@ export default function App() {
       const state = readForecastUrl();
       setHorizon(state.horizon);
       setDate(state.date);
+      setSection(state.section);
     };
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
@@ -46,6 +62,11 @@ export default function App() {
     queryFn: () => getPointForecast(selected!, horizon, date),
     enabled: Boolean(selected) && view === "day",
   });
+  const insights = useQuery({
+    queryKey: ["insights", horizon, date],
+    queryFn: () => getInsights(horizon, date),
+    retry: 1,
+  });
   const refresh = useMutation({
     mutationFn: refreshForecast,
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["forecast"] }),
@@ -57,13 +78,18 @@ export default function App() {
     setDate(today);
     setView("day");
     setSelected(null);
-    writeUrl(next, today);
+    writeUrl(next, today, section);
   };
   const changeDate = (next: string) => {
     setDate(next);
     setView("day");
     setSelected(null);
-    writeUrl(horizon, next);
+    writeUrl(horizon, next, section);
+  };
+  const changeSection = (next: Section) => {
+    setSection(next);
+    setSelected(null);
+    writeUrl(horizon, date, next);
   };
 
   if (forecast.isLoading)
@@ -130,6 +156,7 @@ export default function App() {
             </div>
           )}
         </div>
+        <SectionControl value={section} onChange={changeSection} />
         <DayCards
           days={data.daily_summaries}
           selected={data.selected_date}
@@ -159,6 +186,7 @@ export default function App() {
           <PeriodOverview
             days={data.daily_summaries}
             summary={data.period_summary}
+            section={section}
           />
         ) : (
           <>
@@ -172,34 +200,175 @@ export default function App() {
                     timeZone: "Asia/Yakutsk",
                   }).format(new Date(`${data.selected_date}T03:00:00+09:00`))}
                 </span>
-                <h2>{temperature(avg)}</h2>
-                <p>Средняя температура по контрольным точкам</p>
+                <h2>
+                  {section === "temperature"
+                    ? temperature(avg)
+                    : section === "precipitation"
+                      ? `${number(rain)} мм`
+                      : `${number(
+                          data.points.reduce(
+                            (sum, point) => sum + (point.wind_speed.mean ?? 0),
+                            0,
+                          ) / data.points.length,
+                        )} м/с`}
+                </h2>
+                <p>
+                  {section === "temperature"
+                    ? "Средняя температура по контрольным точкам"
+                    : section === "precipitation"
+                      ? "Средняя суточная сумма осадков"
+                      : "Средняя скорость ветра"}
+                </p>
               </div>
               <div className="cards">
-                <article>
-                  <span>Минимум</span>
-                  <strong>{temperature(min)}</strong>
-                </article>
-                <article>
-                  <span>Максимум</span>
-                  <strong>{temperature(max)}</strong>
-                </article>
-                <article>
-                  <span>Осадки</span>
-                  <strong>{number(rain)} мм</strong>
-                </article>
-                <article>
-                  <span>Макс. порыв</span>
-                  <strong>{number(gust)} м/с</strong>
-                </article>
-                <article>
-                  <span>Согласованность</span>
-                  <strong>
-                    {lowCount
-                      ? `${lowCount} точек — низкая`
-                      : "высокая / средняя"}
-                  </strong>
-                </article>
+                {section === "temperature" && (
+                  <>
+                    <article>
+                      <span>Минимум</span>
+                      <strong>{temperature(min)}</strong>
+                    </article>
+                    <article>
+                      <span>Максимум</span>
+                      <strong>{temperature(max)}</strong>
+                    </article>
+                    <article>
+                      <span>Осадки</span>
+                      <strong>{number(rain)} мм</strong>
+                    </article>
+                    <article>
+                      <span>Макс. порыв</span>
+                      <strong>{number(gust)} м/с</strong>
+                    </article>
+                    <article>
+                      <span>Согласованность</span>
+                      <strong>
+                        {lowCount
+                          ? `${lowCount} точек — низкая`
+                          : "высокая / средняя"}
+                      </strong>
+                    </article>
+                  </>
+                )}
+                {section === "precipitation" && (
+                  <>
+                    <article>
+                      <span>Медиана</span>
+                      <strong>
+                        {number(
+                          data.points.reduce(
+                            (sum, point) =>
+                              sum + (point.precipitation.median ?? 0),
+                            0,
+                          ) / data.points.length,
+                        )}{" "}
+                        мм
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Максимум по области</span>
+                      <strong>
+                        {
+                          data.points.reduce((a, b) =>
+                            (a.precipitation.mean ?? 0) >
+                            (b.precipitation.mean ?? 0)
+                              ? a
+                              : b,
+                          ).point.name
+                        }
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Пиковая интенсивность</span>
+                      <strong>
+                        {number(
+                          Math.max(
+                            ...data.points.map(
+                              (point) =>
+                                point.precipitation_analysis.peak_value ?? 0,
+                            ),
+                          ),
+                        )}{" "}
+                        мм/ч
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Макс. продолжительность</span>
+                      <strong>
+                        {Math.max(
+                          ...data.points.map(
+                            (point) =>
+                              point.precipitation_analysis.duration_hours,
+                          ),
+                        )}{" "}
+                        ч
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Согласованность</span>
+                      <strong>
+                        {
+                          data.points.filter(
+                            (point) => point.precipitation.range! > 5,
+                          ).length
+                        }{" "}
+                        точек требуют внимания
+                      </strong>
+                    </article>
+                  </>
+                )}
+                {section === "wind" && (
+                  <>
+                    <article>
+                      <span>Средняя скорость</span>
+                      <strong>
+                        {number(
+                          data.points.reduce(
+                            (sum, point) => sum + (point.wind_speed.mean ?? 0),
+                            0,
+                          ) / data.points.length,
+                        )}{" "}
+                        м/с
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Максимальный порыв</span>
+                      <strong>{number(gust)} м/с</strong>
+                    </article>
+                    <article>
+                      <span>Источник порыва</span>
+                      <strong>
+                        {
+                          data.points.reduce((a, b) =>
+                            (a.max_gust ?? 0) > (b.max_gust ?? 0) ? a : b,
+                          ).max_gust_source
+                        }
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Направление</span>
+                      <strong>
+                        {data.points[0].wind_analysis.direction_label ??
+                          "Расходится"}
+                      </strong>
+                    </article>
+                    <article>
+                      <span>Угловой разброс</span>
+                      <strong>
+                        {number(
+                          Math.max(
+                            ...data.points.map(
+                              (point) =>
+                                point.wind_analysis
+                                  .maximum_direction_disagreement_deg ?? 0,
+                            ),
+                          ),
+                          0,
+                        )}
+                        °
+                      </strong>
+                    </article>
+                  </>
+                )}
               </div>
             </section>
             <section>
@@ -210,7 +379,11 @@ export default function App() {
                 </div>
                 <p>Размер маркера показывает расхождение моделей</p>
               </div>
-              <WeatherMap points={data.points} onSelect={setSelected} />
+              <WeatherMap
+                points={data.points}
+                onSelect={setSelected}
+                section={section}
+              />
             </section>
             <section>
               <div className="section-heading">
@@ -220,7 +393,18 @@ export default function App() {
                 </div>
                 <p>Сортировка: максимальное расхождение</p>
               </div>
-              <PointsTable points={data.points} onSelect={setSelected} />
+              {section === "temperature" && (
+                <PointsTable points={data.points} onSelect={setSelected} />
+              )}
+              {section === "precipitation" && (
+                <PrecipitationTable
+                  points={data.points}
+                  onSelect={setSelected}
+                />
+              )}
+              {section === "wind" && (
+                <WindTable points={data.points} onSelect={setSelected} />
+              )}
             </section>
             {selected &&
               (details.isLoading ? (
@@ -229,82 +413,91 @@ export default function App() {
                 <PointDetails
                   data={details.data}
                   dimPastHours={data.selected_date === localDate()}
+                  section={section}
                 />
               ) : (
                 <div className="warning">Подробности недоступны</div>
               ))}
-            <section className="extremes">
-              <span className="eyebrow">Экстремумы выбранного дня</span>
-              <h2>На что обратить внимание</h2>
-              <div className="cards">
-                <article>
-                  <span>Самая высокая температура</span>
-                  <strong>
-                    {
-                      data.points.reduce((a, b) =>
-                        a.maximum > b.maximum ? a : b,
-                      ).point.name
-                    }
-                  </strong>
-                  <small>
-                    {temperature(max)} ·{" "}
-                    {
-                      data.points.reduce((a, b) =>
-                        a.maximum > b.maximum ? a : b,
-                      ).maximum_source
-                    }
-                  </small>
-                </article>
-                <article>
-                  <span>Самая низкая температура</span>
-                  <strong>
-                    {
-                      data.points.reduce((a, b) =>
-                        a.minimum < b.minimum ? a : b,
-                      ).point.name
-                    }
-                  </strong>
-                  <small>
-                    {temperature(min)} ·{" "}
-                    {
-                      data.points.reduce((a, b) =>
-                        a.minimum < b.minimum ? a : b,
-                      ).minimum_source
-                    }
-                  </small>
-                </article>
-                <article>
-                  <span>Максимальные осадки</span>
-                  <strong>
-                    {
-                      data.points.reduce((a, b) =>
-                        (a.precipitation.mean ?? 0) >
-                        (b.precipitation.mean ?? 0)
-                          ? a
-                          : b,
-                      ).point.name
-                    }
-                  </strong>
-                </article>
-                <article>
-                  <span>Максимальный порыв</span>
-                  <strong>
-                    {
-                      data.points.reduce((a, b) =>
-                        (a.max_gust ?? 0) > (b.max_gust ?? 0) ? a : b,
-                      ).point.name
-                    }
-                  </strong>
-                  <small>{number(gust)} м/с</small>
-                </article>
-                <article>
-                  <span>Максимальное расхождение</span>
-                  <strong>{data.points[0].point.name}</strong>
-                  <small>{number(data.points[0].spread)} °C</small>
-                </article>
-              </div>
-            </section>
+            {section === "temperature" && (
+              <section className="extremes">
+                <span className="eyebrow">Экстремумы выбранного дня</span>
+                <h2>На что обратить внимание</h2>
+                <div className="cards">
+                  <article>
+                    <span>Самая высокая температура</span>
+                    <strong>
+                      {
+                        data.points.reduce((a, b) =>
+                          a.maximum > b.maximum ? a : b,
+                        ).point.name
+                      }
+                    </strong>
+                    <small>
+                      {temperature(max)} ·{" "}
+                      {
+                        data.points.reduce((a, b) =>
+                          a.maximum > b.maximum ? a : b,
+                        ).maximum_source
+                      }
+                    </small>
+                  </article>
+                  <article>
+                    <span>Самая низкая температура</span>
+                    <strong>
+                      {
+                        data.points.reduce((a, b) =>
+                          a.minimum < b.minimum ? a : b,
+                        ).point.name
+                      }
+                    </strong>
+                    <small>
+                      {temperature(min)} ·{" "}
+                      {
+                        data.points.reduce((a, b) =>
+                          a.minimum < b.minimum ? a : b,
+                        ).minimum_source
+                      }
+                    </small>
+                  </article>
+                  <article>
+                    <span>Максимальные осадки</span>
+                    <strong>
+                      {
+                        data.points.reduce((a, b) =>
+                          (a.precipitation.mean ?? 0) >
+                          (b.precipitation.mean ?? 0)
+                            ? a
+                            : b,
+                        ).point.name
+                      }
+                    </strong>
+                  </article>
+                  <article>
+                    <span>Максимальный порыв</span>
+                    <strong>
+                      {
+                        data.points.reduce((a, b) =>
+                          (a.max_gust ?? 0) > (b.max_gust ?? 0) ? a : b,
+                        ).point.name
+                      }
+                    </strong>
+                    <small>{number(gust)} м/с</small>
+                  </article>
+                  <article>
+                    <span>Максимальное расхождение</span>
+                    <strong>{data.points[0].point.name}</strong>
+                    <small>{number(data.points[0].spread)} °C</small>
+                  </article>
+                </div>
+              </section>
+            )}
           </>
+        )}
+        {insights.data && (
+          <InsightsPanel
+            data={insights.data}
+            category={section === "temperature" ? "all" : section}
+          />
         )}
       </main>
       <footer>

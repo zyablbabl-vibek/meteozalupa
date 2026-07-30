@@ -1,4 +1,9 @@
-import type { Forecast, Horizon, PointForecast } from "../types/weather";
+import type {
+  Forecast,
+  Horizon,
+  InsightsResponse,
+  PointForecast,
+} from "../types/weather";
 
 const BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
@@ -27,3 +32,5 @@ export const getPointForecast = (id: string, horizon: Horizon, date?: string) =>
   request<PointForecast>(`/api/forecast/${id}?${params(horizon, date)}`);
 export const refreshForecast = () =>
   request("/api/refresh", { method: "POST" });
+export const getInsights = (horizon: Horizon, date?: string) =>
+  request<InsightsResponse>(`/api/insights?${params(horizon, date)}`);

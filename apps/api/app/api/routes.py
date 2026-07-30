@@ -17,6 +17,7 @@ from app.services.forecast import (
     refresh_lock,
 )
 from app.services.horizons import Horizon, filter_dates, horizon_dates, select_date
+from app.services.insights import build_insights
 
 router = APIRouter(prefix="/api")
 HorizonQuery = Annotated[str, Query(description="today, 3d или 7d")]
@@ -133,6 +134,33 @@ async def summary(
             for model in MODELS.values()
         },
         "warnings": warnings,
+    }
+
+
+@router.get("/insights")
+async def insights(
+    horizon: HorizonQuery = "today",
+    date: DateQuery = None,
+    category: str = "all",
+) -> dict:
+    selected_horizon, dates, selected_date = context(horizon, date)
+    if category not in {"all", "precipitation", "wind"}:
+        raise HTTPException(
+            422, "Неизвестная category. Допустимые значения: all, precipitation, wind"
+        )
+    records, _ = await get_records()
+    result = build_insights(records, dates, selected_date)
+    empty = {"items": [], "total": 0}
+    return {
+        "horizon": selected_horizon,
+        "period_start": dates[0],
+        "period_end": dates[-1],
+        "selected_date": selected_date,
+        "disclaimer": result["disclaimer"],
+        "precipitation": (
+            result["precipitation"] if category in {"all", "precipitation"} else empty
+        ),
+        "wind": result["wind"] if category in {"all", "wind"} else empty,
     }
 
 

@@ -8,6 +8,8 @@ services:
       FORECAST_CACHE_TTL_SECONDS: ${FORECAST_CACHE_TTL_SECONDS:-10800}
       DATABASE_URL: sqlite:///./data/weather.db
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    env_file:
+      - .env
     ports:
       - "${API_PORT:-8000}:8000"
     volumes:
