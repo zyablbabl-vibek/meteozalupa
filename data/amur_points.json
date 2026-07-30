@@ -1,0 +1,27 @@
+{
+  "region": "Амурская область",
+  "timezone": "Asia/Yakutsk",
+  "points": [
+    {"id":"blagoveshchensk","name":"Благовещенск","latitude":50.2907,"longitude":127.5272},
+    {"id":"belogorsk","name":"Белогорск","latitude":50.9158,"longitude":128.4611},
+    {"id":"svobodny","name":"Свободный","latitude":51.3753,"longitude":128.1408},
+    {"id":"tynda","name":"Тында","latitude":55.1540,"longitude":124.7460},
+    {"id":"zeya","name":"Зея","latitude":53.7360,"longitude":127.2570},
+    {"id":"shimanovsk","name":"Шимановск","latitude":52.0050,"longitude":127.6770},
+    {"id":"skovorodino","name":"Сковородино","latitude":53.9847,"longitude":123.9430},
+    {"id":"arkhara","name":"Архара","latitude":49.4247,"longitude":130.0850},
+    {"id":"ekimchan","name":"Экимчан","latitude":53.0697,"longitude":132.9400},
+    {"id":"raychikhinsk","name":"Райчихинск","latitude":49.7980,"longitude":129.4070},
+    {"id":"magdagachi","name":"Магдагачи","latitude":53.4533,"longitude":125.8090},
+    {"id":"seryshevo","name":"Серышево","latitude":51.0930,"longitude":128.3780},
+    {"id":"zavitinsk","name":"Завитинск","latitude":50.1114,"longitude":129.4410},
+    {"id":"progress","name":"Прогресс","latitude":49.7500,"longitude":129.6730},
+    {"id":"novobureysky","name":"Новобурейский","latitude":49.7980,"longitude":129.8790},
+    {"id":"fevralsk","name":"Февральск","latitude":52.4667,"longitude":130.9667},
+    {"id":"uglegorsk","name":"Циолковский","latitude":51.7620,"longitude":128.1210},
+    {"id":"ivanovka","name":"Ивановка","latitude":50.3700,"longitude":127.9900},
+    {"id":"tambovka","name":"Тамбовка","latitude":50.0960,"longitude":128.0540},
+    {"id":"konstantinovka","name":"Константиновка","latitude":49.6200,"longitude":127.9900}
+  ]
+}
+
