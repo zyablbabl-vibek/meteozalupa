@@ -1,5 +1,24 @@
 export type Horizon = "today" | "3d" | "7d";
 export type Section = "temperature" | "precipitation" | "wind";
+export type View = "day" | "period";
+export type DataStatus = "verified" | "partially_verified" | "demo";
+export type Region = {
+  id: string;
+  name: string;
+  short_name: string;
+  name_prepositional: string;
+  name_genitive: string;
+  federal_district: string;
+  primary_timezone: string;
+  has_multiple_timezones: boolean;
+  default_point_id: string;
+  map_center_latitude: number;
+  map_center_longitude: number;
+  map_zoom: number;
+  data_status: DataStatus;
+  point_count: number;
+  geojson_available: boolean;
+};
 export type ModelValues = Record<string, number | null>;
 export type Statistics = {
   count: number;
@@ -17,9 +36,14 @@ export type Statistics = {
 };
 export type Point = {
   id: string;
+  region_id: string;
   name: string;
   latitude: number;
   longitude: number;
+  timezone: string;
+  point_type: string;
+  is_regional_center: boolean;
+  weight: number;
 };
 export type PointSummary = {
   point: Point;
@@ -139,12 +163,16 @@ export type PeriodSummary = {
   };
 };
 export type Forecast = {
+  region: Region;
+  region_id: string;
+  region_name: string;
   horizon: Horizon;
   period_start: string;
   period_end: string;
   selected_date: string;
   available_dates: string[];
   data_mode: "mock" | "live";
+  model_availability: Record<string, boolean>;
   warnings: string[];
   last_updated: string;
   points: PointSummary[];
@@ -153,6 +181,7 @@ export type Forecast = {
   period_summary: PeriodSummary;
 };
 export type PointForecast = {
+  region: Region;
   point: Point;
   horizon: Horizon;
   selected_date: string;
@@ -177,6 +206,9 @@ export type WeatherInsight = {
   values: Record<string, string | number | null>;
 };
 export type InsightsResponse = {
+  region: Region;
+  region_id: string;
+  region_name: string;
   horizon: Horizon;
   period_start: string;
   period_end: string;

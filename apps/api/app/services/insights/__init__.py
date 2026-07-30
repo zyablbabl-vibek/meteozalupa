@@ -1,6 +1,7 @@
 from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
-from app.services.forecast import LOCAL_TZ, period_summary, point_summaries
+from app.services.forecast import period_summary, point_summaries
 from app.services.horizons import filter_dates
 from app.services.insights.precipitation import precipitation_insights
 from app.services.insights.ranking import rank
@@ -12,9 +13,12 @@ DISCLAIMER = (
 )
 
 
-def build_insights(records: list, dates: list, selected_date) -> dict:
-    start = datetime.combine(dates[0], time.min, LOCAL_TZ)
-    end = datetime.combine(dates[-1], time(23, 59), LOCAL_TZ)
+def build_insights(
+    records: list, dates: list, selected_date, primary_timezone: str = "Asia/Yakutsk"
+) -> dict:
+    timezone = ZoneInfo(primary_timezone)
+    start = datetime.combine(dates[0], time.min, timezone)
+    end = datetime.combine(dates[-1], time(23, 59), timezone)
     selected_points = point_summaries(filter_dates(records, [selected_date]))
     precipitation = precipitation_insights(selected_points, start, end)
     wind = wind_insights(selected_points, start, end)

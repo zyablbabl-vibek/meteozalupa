@@ -18,8 +18,8 @@ const shortDate = (value: string) =>
   new Intl.DateTimeFormat("ru-RU", {
     day: "numeric",
     month: "short",
-    timeZone: "Asia/Yakutsk",
-  }).format(new Date(`${value}T03:00:00+09:00`));
+    timeZone: "UTC",
+  }).format(new Date(`${value}T00:00:00Z`));
 
 export function PeriodOverview({
   days,
@@ -30,15 +30,22 @@ export function PeriodOverview({
   summary: PeriodSummary;
   section?: Section;
 }) {
-  const cumulative = { ECMWF: 0, GFS: 0, ICON: 0, mean: 0 };
+  const cumulative: Record<"ECMWF" | "GFS" | "ICON" | "mean", number | null> = {
+    ECMWF: null,
+    GFS: null,
+    ICON: null,
+    mean: null,
+  };
+  const accumulate = (current: number | null, next: number | null) =>
+    next == null ? current : current == null ? next : current + next;
   const data = days.map((day) => {
-    const ECMWF = day.models["ECMWF IFS"]?.precipitation_sum ?? 0;
-    const GFS = day.models["NOAA GFS"]?.precipitation_sum ?? 0;
-    const ICON = day.models["DWD ICON"]?.precipitation_sum ?? 0;
-    cumulative.ECMWF += ECMWF;
-    cumulative.GFS += GFS;
-    cumulative.ICON += ICON;
-    cumulative.mean += day.precipitation_sum;
+    const ECMWF = day.models["ECMWF IFS"]?.precipitation_sum ?? null;
+    const GFS = day.models["NOAA GFS"]?.precipitation_sum ?? null;
+    const ICON = day.models["DWD ICON"]?.precipitation_sum ?? null;
+    cumulative.ECMWF = accumulate(cumulative.ECMWF, ECMWF);
+    cumulative.GFS = accumulate(cumulative.GFS, GFS);
+    cumulative.ICON = accumulate(cumulative.ICON, ICON);
+    cumulative.mean = accumulate(cumulative.mean, day.precipitation_sum);
     return {
       date: shortDate(day.date),
       min: day.minimum_temperature,

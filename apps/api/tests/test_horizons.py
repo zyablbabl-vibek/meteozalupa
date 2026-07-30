@@ -7,7 +7,9 @@ from app.services.horizons import current_local_date, filter_dates, horizon_date
 
 
 def test_current_date_uses_yakutsk_timezone():
-    assert current_local_date(datetime(2026, 7, 30, 16, 30, tzinfo=UTC)) == date(2026, 7, 31)
+    assert current_local_date(
+        "Asia/Yakutsk", datetime(2026, 7, 30, 16, 30, tzinfo=UTC)
+    ) == date(2026, 7, 31)
 
 
 @pytest.mark.parametrize(
@@ -43,6 +45,7 @@ def test_filtering_reuses_one_seven_day_dataset():
             self.forecast_time_local = datetime.combine(
                 day, datetime.min.time(), ZoneInfo("Asia/Yakutsk")
             )
+            self.local_date = day
 
     records = [Record(day) for day in horizon_dates("7d", date(2026, 7, 30))]
     assert len(filter_dates(records, horizon_dates("today", date(2026, 7, 30)))) == 1

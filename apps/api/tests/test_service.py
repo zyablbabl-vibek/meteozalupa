@@ -9,13 +9,16 @@ from app.statistics.core import daily_precipitation, numeric_consensus
 def record(model: str, hour: int, rain: float) -> ForecastRecord:
     local = datetime(2026, 8, 1, hour, tzinfo=ZoneInfo("Asia/Yakutsk"))
     return ForecastRecord(
+        region_id="amur-oblast",
         model=model,
         point_id="x",
         point_name="X",
+        point_timezone="Asia/Yakutsk",
         latitude=50,
         longitude=127,
         forecast_time_utc=local.astimezone(UTC),
         forecast_time_local=local,
+        local_date=local.date(),
         fetched_at=datetime.now(UTC),
         temperature_2m_c=float(hour),
         precipitation_mm=rain,

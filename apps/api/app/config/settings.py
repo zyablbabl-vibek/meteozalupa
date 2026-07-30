@@ -11,7 +11,11 @@ class Settings(BaseSettings):
     forecast_cache_ttl_seconds: int = 10800
     database_url: str = "sqlite:///./data/weather.db"
     log_level: str = "INFO"
-    points_file: Path = ROOT / "data" / "amur_points.json"
+    regions_data_dir: Path = ROOT / "data" / "regions"
+    regions_registry_file: Path = ROOT / "data" / "regions" / "regions.json"
+    regions_geojson_dir: Path = ROOT / "data" / "geo" / "regions"
+    open_meteo_batch_size: int = 25
+    open_meteo_max_concurrency: int = 3
     precipitation_event_threshold_mm: float = 0.1
     precip_daily_attention_mm: float = 10
     precip_daily_notable_mm: float = 25

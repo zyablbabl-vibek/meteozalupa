@@ -1,10 +1,8 @@
 import asyncio
-import json
 import math
 import statistics
 from collections import defaultdict
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import httpx
@@ -15,6 +13,7 @@ from app.db.database import load_fresh, save
 from app.providers.ecmwf import EcmwfProvider
 from app.providers.gfs import GfsProvider
 from app.providers.icon import IconProvider
+from app.regions.registry import get_region, load_points
 from app.schemas.forecast import FIELD_BY_METRIC, ForecastRecord, Point
 from app.services.horizons import current_local_date, filter_dates
 from app.statistics.core import agreement, circular_mean, numeric_consensus
@@ -26,39 +25,56 @@ from app.statistics.events import (
     relative_spread,
 )
 
-LOCAL_TZ = ZoneInfo("Asia/Yakutsk")
 MODEL_LABELS = tuple(model.label for model in MODELS.values())
 refresh_lock = asyncio.Lock()
 
 
-def points() -> list[Point]:
-    payload = json.loads(Path(settings.points_file).read_text())
-    return [Point.model_validate(item) for item in payload["points"]]
+def points(region_id: str) -> list[Point]:
+    return list(load_points(region_id))
 
 
-def mock_records(start_day: date, end_day: date | None = None) -> list[ForecastRecord]:
+def mock_records(
+    region_id: str, start_day: date, end_day: date | None = None
+) -> list[ForecastRecord]:
     end = end_day or start_day
     result: list[ForecastRecord] = []
     fetched = datetime.now(UTC)
     total_days = (end - start_day).days + 1
+    region_points = points(region_id)
+    region_bias = (sum(ord(char) for char in region_id) % 17 - 8) * 0.7
     for day_offset in range(total_days):
         day = start_day + timedelta(days=day_offset)
-        for p_index, point in enumerate(points()):
+        for p_index, point in enumerate(region_points):
             for model_index, model in enumerate(MODEL_LABELS):
-                if point.id == "seryshevo" and model == "DWD ICON":
+                if (
+                    (point.id == "seryshevo" or region_id == "magadan-oblast")
+                    and model == "DWD ICON"
+                    and p_index % 4 == 0
+                ):
                     continue
                 for hour in range(24):
-                    local = datetime.combine(day, datetime.min.time(), LOCAL_TZ).replace(hour=hour)
+                    local = datetime.combine(
+                        day, datetime.min.time(), ZoneInfo(point.timezone)
+                    ).replace(hour=hour)
                     phase = math.sin((hour - 7) * math.pi / 12)
                     day_wave = math.sin(day_offset * math.pi / 3) * 2.2
                     deviation = (model_index - 1) * (
-                        4.5 if point.id == "tynda" and day_offset == 2 else 0.7
+                        4.5
+                        if (point.id == "tynda" or region_id == "sakha-yakutia")
+                        and day_offset == 2
+                        else 0.7
                     )
                     rain = (
                         2.4 + day_offset * 0.15
-                        if point.id == "ekimchan" and 11 <= hour <= 15
+                        if (
+                            point.id == "ekimchan"
+                            or (region_id == "kamchatka-krai" and p_index == 0)
+                        )
+                        and 11 <= hour <= 15
                         else max(0, math.sin(hour + day_offset) * 0.15)
                     )
+                    if region_id == "jewish-autonomous-oblast":
+                        rain = min(rain, 0.05)
                     direction = (
                         [350, 10, 2][model_index]
                         if point.id == "blagoveshchensk"
@@ -66,16 +82,24 @@ def mock_records(start_day: date, end_day: date | None = None) -> list[ForecastR
                     )
                     result.append(
                         ForecastRecord(
+                            region_id=region_id,
                             model=model,
                             point_id=point.id,
                             point_name=point.name,
+                            point_timezone=point.timezone,
                             latitude=point.latitude,
                             longitude=point.longitude,
                             forecast_time_utc=local.astimezone(UTC),
                             forecast_time_local=local,
+                            local_date=day,
                             fetched_at=fetched,
                             temperature_2m_c=(
-                                15 + phase * 9 + day_wave - p_index * 0.35 + deviation
+                                15
+                                + region_bias
+                                + phase * 9
+                                + day_wave
+                                - p_index * 0.18
+                                + deviation
                             ),
                             relative_humidity_2m_pct=65 - phase * 18 + model_index * 2,
                             pressure_msl_hpa=1008 + math.sin(hour / 4) * 3 + model_index,
@@ -86,8 +110,11 @@ def mock_records(start_day: date, end_day: date | None = None) -> list[ForecastR
                             ),
                             wind_direction_10m_deg=direction,
                             wind_gusts_10m_ms=(
-                                15
-                                if point.id == "skovorodino"
+                                24
+                                if (
+                                    point.id == "skovorodino"
+                                    or region_id == "chukotka-autonomous-okrug"
+                                )
                                 and model_index == 2
                                 and hour == 16
                                 and day_offset == 4
@@ -98,25 +125,43 @@ def mock_records(start_day: date, end_day: date | None = None) -> list[ForecastR
     return result
 
 
-async def get_records(force: bool = False) -> tuple[list[ForecastRecord], list[str]]:
-    start = current_local_date()
+async def get_records(
+    region_id: str, force: bool = False
+) -> tuple[list[ForecastRecord], list[str]]:
+    region = get_region(region_id)
+    start = current_local_date(region.primary_timezone)
     end = start + timedelta(days=6)
     if not force:
-        cached = load_fresh(start, settings.forecast_cache_ttl_seconds)
-        cached_days = {record.forecast_time_local.date() for record in cached}
+        cached = load_fresh(region_id, start, settings.forecast_cache_ttl_seconds)
+        cached_days = {record.local_date for record in cached}
         if len(cached_days) == 7:
             return cached, []
     if settings.data_mode == "mock":
-        mock_data = mock_records(start, end)
-        save(start, mock_data, {"mock": [{"deterministic": True, "days": 7}]})
+        mock_data = mock_records(region_id, start, end)
+        save(
+            region_id,
+            start,
+            mock_data,
+            {"mock": [{"deterministic": True, "days": 7, "region_id": region_id}]},
+            region.primary_timezone,
+        )
         return mock_data, []
     errors: list[str] = []
     records: list[ForecastRecord] = []
     raw: dict[str, list[dict]] = {}
-    async with httpx.AsyncClient(limits=httpx.Limits(max_connections=3)) as client:
+    async with httpx.AsyncClient(
+        limits=httpx.Limits(max_connections=settings.open_meteo_max_concurrency)
+    ) as client:
         providers = [EcmwfProvider(client), GfsProvider(client), IconProvider(client)]
         results = await asyncio.gather(
-            *(provider.fetch(points(), start, end) for provider in providers),
+            *(
+                provider.fetch(
+                    points(region_id),
+                    start - timedelta(days=1),
+                    end + timedelta(days=1),
+                )
+                for provider in providers
+            ),
             return_exceptions=True,
         )
         for provider, result in zip(providers, results, strict=True):
@@ -124,10 +169,14 @@ async def get_records(force: bool = False) -> tuple[list[ForecastRecord], list[s
                 errors.append(f"{provider.config.label}: {result}")
             else:
                 provider_records, provider_raw = result
-                records.extend(provider_records)
+                records.extend(
+                    record
+                    for record in provider_records
+                    if start <= record.local_date <= end
+                )
                 raw[provider.config.label] = provider_raw
     if records:
-        save(start, records, raw)
+        save(region_id, start, records, raw, region.primary_timezone)
     return records, errors
 
 
@@ -147,7 +196,9 @@ def hourly(records: list[ForecastRecord], metric: str) -> list[dict]:
         result.append(
             {
                 "point_id": point_id,
+                "region_id": group[0].region_id,
                 "point_name": group[0].point_name,
+                "point_timezone": group[0].point_timezone,
                 "latitude": group[0].latitude,
                 "longitude": group[0].longitude,
                 "forecast_time_utc": timestamp,
@@ -205,7 +256,7 @@ AGREEMENT_METRIC_BY_DAILY = {
 def daily_model_aggregates(records: list[ForecastRecord]) -> list[dict]:
     grouped: dict[tuple[str, date, str], list[ForecastRecord]] = defaultdict(list)
     for record in records:
-        grouped[(record.point_id, record.forecast_time_local.date(), record.model)].append(record)
+        grouped[(record.point_id, record.local_date, record.model)].append(record)
     result = []
     for (point_id, day, model), group in grouped.items():
         values: dict[str, float | None] = {}
@@ -218,7 +269,9 @@ def daily_model_aggregates(records: list[ForecastRecord]) -> list[dict]:
             {
                 "date": day,
                 "point_id": point_id,
+                "region_id": group[0].region_id,
                 "point_name": group[0].point_name,
+                "point_timezone": group[0].point_timezone,
                 "model": model,
                 **values,
             }
@@ -360,7 +413,8 @@ def wind_analysis(records: list[ForecastRecord], rows: list[dict], by_metric: di
 def point_summaries(records: list[ForecastRecord]) -> list[dict]:
     aggregates = daily_model_aggregates(records)
     output = []
-    for point in points():
+    region_id = records[0].region_id if records else None
+    for point in points(region_id) if region_id else []:
         point_records = [record for record in records if record.point_id == point.id]
         rows = [row for row in aggregates if row["point_id"] == point.id]
         if not rows:
@@ -384,10 +438,14 @@ def point_summaries(records: list[ForecastRecord]) -> list[dict]:
         temp_max = by_metric["temperature_max"]
         if not temp_mean.get("consensus_available"):
             continue
-        spread = max(
-            by_metric[key].get("range", 0)
+        spread_values = [
+            by_metric[key]["range"]
             for key in ("temperature_min", "temperature_max", "temperature_mean")
-        )
+            if by_metric[key].get("range") is not None
+        ]
+        if not spread_values:
+            continue
+        spread = max(spread_values)
         output.append(
             {
                 "point": point.model_dump(),
@@ -431,12 +489,14 @@ def _extreme(
     record = (max if mode == "max" else min)(available, key=lambda item: getattr(item, field))
     return {
         "metric": metric,
+        "region_id": record.region_id,
         "value": getattr(record, field),
         "unit": unit,
         "date": record.forecast_time_local.date(),
         "forecast_time": record.forecast_time_local,
         "point_id": record.point_id,
         "point_name": record.point_name,
+        "point_timezone": record.point_timezone,
         "model": record.model,
     }
 
@@ -462,21 +522,28 @@ def daily_summary(records: list[ForecastRecord], day: date) -> dict:
             "wind_gust_max": max(row["wind_gust_max"] for row in rows),
         }
     spreads = [item["spread"] for item in point_data]
+
+    def point_mean(metric: str) -> float | None:
+        available = [
+            item[metric]["mean"]
+            for item in point_data
+            if item[metric].get("mean") is not None
+        ]
+        return statistics.fmean(available) if available else None
+
+    gusts = [item["max_gust"] for item in point_data if item["max_gust"] is not None]
     return {
+        "region_id": day_records[0].region_id,
         "date": day,
         "available": True,
         "mean_temperature": statistics.fmean(item["mean_temperature"] for item in point_data),
         "minimum_temperature": min(item["minimum"] for item in point_data),
         "maximum_temperature": max(item["maximum"] for item in point_data),
-        "precipitation_sum": statistics.fmean(
-            item["precipitation"].get("mean", 0) for item in point_data
-        ),
-        "mean_wind_speed": statistics.fmean(
-            item["wind_speed"].get("mean", 0) for item in point_data
-        ),
-        "max_gust": max(item["max_gust"] or 0 for item in point_data),
-        "mean_humidity": statistics.fmean(item["humidity"].get("mean", 0) for item in point_data),
-        "mean_pressure": statistics.fmean(item["pressure"].get("mean", 0) for item in point_data),
+        "precipitation_sum": point_mean("precipitation"),
+        "mean_wind_speed": point_mean("wind_speed"),
+        "max_gust": max(gusts) if gusts else None,
+        "mean_humidity": point_mean("humidity"),
+        "mean_pressure": point_mean("pressure"),
         "spread": max(spreads),
         "agreement": agreement("temperature_2m", max(spreads)),
         "models": models,
@@ -501,19 +568,18 @@ def period_summary(records: list[ForecastRecord], dates: list[date]) -> dict:
     available = [item for item in summaries if item.get("available")]
     aggregates = daily_model_aggregates(selected)
     precipitation_points = []
-    for point in points():
-        values = {
-            model: (
-                sum(
-                    row["precipitation_sum"] or 0
-                    for row in aggregates
-                    if row["model"] == model and row["point_id"] == point.id
-                )
-                if any(row["model"] == model and row["point_id"] == point.id for row in aggregates)
-                else None
-            )
-            for model in MODEL_LABELS
-        }
+    region_id = selected[0].region_id if selected else None
+    for point in points(region_id) if region_id else []:
+        values: dict[str, float | None] = {}
+        for model in MODEL_LABELS:
+            model_totals = [
+                row["precipitation_sum"]
+                for row in aggregates
+                if row["model"] == model
+                and row["point_id"] == point.id
+                and row["precipitation_sum"] is not None
+            ]
+            values[model] = sum(model_totals) if model_totals else None
         stats = numeric_consensus(values)
         if stats.get("consensus_available"):
             precipitation_points.append(
@@ -551,6 +617,7 @@ def period_summary(records: list[ForecastRecord], dates: list[date]) -> dict:
     temperature_stats = numeric_consensus(temperature_by_model)
     return {
         "available": True,
+        "region_id": selected[0].region_id,
         "period_start": dates[0],
         "period_end": dates[-1],
         "warmest_day": warmest,

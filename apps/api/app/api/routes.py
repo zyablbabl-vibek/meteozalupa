@@ -3,9 +3,18 @@ from typing import Annotated
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import FileResponse
 
 from app.config.models import METRICS, MODELS
 from app.config.settings import settings
+from app.regions.registry import (
+    DEFAULT_REGION_ID,
+    RegionNotFoundError,
+    get_region,
+    list_regions,
+    load_points,
+)
+from app.regions.schemas import RegionMetadata
 from app.services.forecast import (
     daily_model_aggregates,
     daily_summary,
@@ -22,18 +31,32 @@ from app.services.insights import build_insights
 router = APIRouter(prefix="/api")
 HorizonQuery = Annotated[str, Query(description="today, 3d или 7d")]
 DateQuery = Annotated[date | None, Query()]
+RegionQuery = Annotated[str, Query(description="Стабильный id региона ДФО")]
 
 
-def context(horizon_value: str, requested: date | None) -> tuple[Horizon, list[date], date]:
+def resolve_region(region_id: str) -> RegionMetadata:
+    try:
+        return get_region(region_id)
+    except RegionNotFoundError as exc:
+        raise HTTPException(
+            404,
+            f"{exc}. Выберите один из доступных регионов через GET /api/regions",
+        ) from exc
+
+
+def context(
+    region_id: str, horizon_value: str, requested: date | None
+) -> tuple[RegionMetadata, Horizon, list[date], date]:
+    region = resolve_region(region_id)
     if horizon_value not in {"today", "3d", "7d"}:
         raise HTTPException(422, "Неизвестный horizon. Допустимые значения: today, 3d, 7d")
     horizon: Horizon = horizon_value  # type: ignore[assignment]
-    dates = horizon_dates(horizon)
+    dates = horizon_dates(horizon, timezone=region.primary_timezone)
     try:
-        selected = select_date(horizon, requested)
+        selected = select_date(horizon, requested, timezone=region.primary_timezone)
     except ValueError as exc:
         raise HTTPException(422, str(exc)) from exc
-    return horizon, dates, selected
+    return region, horizon, dates, selected
 
 
 def validate_metric(metric: str) -> None:
@@ -46,22 +69,52 @@ async def health() -> dict:
     return {"status": "ok", "data_mode": settings.data_mode}
 
 
+@router.get("/regions")
+async def regions() -> dict:
+    return {"regions": list_regions()}
+
+
+@router.get("/regions/{region_id}")
+async def region_details(region_id: str) -> RegionMetadata:
+    return resolve_region(region_id)
+
+
+@router.get("/regions/{region_id}/points")
+async def region_points(region_id: str) -> dict:
+    region = resolve_region(region_id)
+    return {"region": region, "points": load_points(region_id)}
+
+
+@router.get("/regions/{region_id}/geojson")
+async def region_geojson(region_id: str) -> FileResponse:
+    region = resolve_region(region_id)
+    path = settings.regions_geojson_dir / f"{region.id}.geojson"
+    if not path.is_file():
+        raise HTTPException(404, "Проверенная GeoJSON-граница для региона не подключена")
+    return FileResponse(path, media_type="application/geo+json")
+
+
 @router.get("/points")
-async def list_points() -> dict:
-    return {"region": "Амурская область", "timezone": "Asia/Yakutsk", "points": points()}
+async def list_points(region_id: RegionQuery = DEFAULT_REGION_ID) -> dict:
+    region = resolve_region(region_id)
+    return {"region": region, "points": points(region_id)}
 
 
 @router.get("/forecast")
 async def forecast(
+    region_id: RegionQuery = DEFAULT_REGION_ID,
     horizon: HorizonQuery = "today",
     date: DateQuery = None,
     metric: str = "temperature_2m",
 ) -> dict:
-    selected_horizon, dates, selected_date = context(horizon, date)
+    region, selected_horizon, dates, selected_date = context(region_id, horizon, date)
     validate_metric(metric)
-    all_records, warnings = await get_records()
+    all_records, warnings = await get_records(region_id)
     selected_records = filter_dates(all_records, [selected_date])
     return {
+        "region": region,
+        "region_id": region.id,
+        "region_name": region.name,
         "horizon": selected_horizon,
         "period_start": dates[0],
         "period_end": dates[-1],
@@ -70,6 +123,10 @@ async def forecast(
         "metric": metric,
         "data_mode": settings.data_mode,
         "models": [model.label for model in MODELS.values()],
+        "model_availability": {
+            model.label: any(record.model == model.label for record in all_records)
+            for model in MODELS.values()
+        },
         "warnings": warnings,
         "last_updated": max((record.fetched_at for record in all_records), default=None),
         "points": point_summaries(selected_records),
@@ -82,20 +139,22 @@ async def forecast(
 @router.get("/forecast/{point_id}")
 async def point_forecast(
     point_id: str,
+    region_id: RegionQuery = DEFAULT_REGION_ID,
     horizon: HorizonQuery = "today",
     date: DateQuery = None,
 ) -> dict:
-    selected_horizon, dates, selected_date = context(horizon, date)
-    point = next((item for item in points() if item.id == point_id), None)
+    region, selected_horizon, dates, selected_date = context(region_id, horizon, date)
+    point = next((item for item in points(region_id) if item.id == point_id), None)
     if point is None:
-        raise HTTPException(404, "Контрольная точка не найдена")
-    all_records, warnings = await get_records()
+        raise HTTPException(404, "Контрольная точка не принадлежит выбранному региону")
+    all_records, warnings = await get_records(region_id)
     period_records = [
         record for record in filter_dates(all_records, dates) if record.point_id == point_id
     ]
     selected_records = filter_dates(period_records, [selected_date])
     daily = daily_model_aggregates(period_records)
     return {
+        "region": region,
         "point": point,
         "horizon": selected_horizon,
         "period_start": dates[0],
@@ -112,16 +171,20 @@ async def point_forecast(
 
 @router.get("/summary")
 async def summary(
+    region_id: RegionQuery = DEFAULT_REGION_ID,
     horizon: HorizonQuery = "today",
     date: DateQuery = None,
 ) -> dict:
-    selected_horizon, dates, selected_date = context(horizon, date)
-    records, warnings = await get_records()
+    region, selected_horizon, dates, selected_date = context(region_id, horizon, date)
+    records, warnings = await get_records(region_id)
     selected_records = filter_dates(records, [selected_date])
     selected_points = point_summaries(selected_records)
     if not selected_points:
         raise HTTPException(503, "Недостаточно модельных данных для сводки")
     return {
+        "region": region,
+        "region_id": region.id,
+        "region_name": region.name,
         "selected_horizon": selected_horizon,
         "period_start": dates[0],
         "period_end": dates[-1],
@@ -139,19 +202,23 @@ async def summary(
 
 @router.get("/insights")
 async def insights(
+    region_id: RegionQuery = DEFAULT_REGION_ID,
     horizon: HorizonQuery = "today",
     date: DateQuery = None,
     category: str = "all",
 ) -> dict:
-    selected_horizon, dates, selected_date = context(horizon, date)
+    region, selected_horizon, dates, selected_date = context(region_id, horizon, date)
     if category not in {"all", "precipitation", "wind"}:
         raise HTTPException(
             422, "Неизвестная category. Допустимые значения: all, precipitation, wind"
         )
-    records, _ = await get_records()
-    result = build_insights(records, dates, selected_date)
+    records, _ = await get_records(region_id)
+    result = build_insights(records, dates, selected_date, region.primary_timezone)
     empty = {"items": [], "total": 0}
     return {
+        "region": region,
+        "region_id": region.id,
+        "region_name": region.name,
         "horizon": selected_horizon,
         "period_start": dates[0],
         "period_end": dates[-1],
@@ -165,14 +232,16 @@ async def insights(
 
 
 @router.post("/refresh")
-async def refresh() -> dict:
+async def refresh(region_id: RegionQuery = DEFAULT_REGION_ID) -> dict:
+    region = resolve_region(region_id)
     if refresh_lock.locked():
         raise HTTPException(409, "Обновление уже выполняется")
     async with refresh_lock:
-        records, warnings = await get_records(force=True)
-    dates = sorted({record.forecast_time_local.date() for record in records})
+        records, warnings = await get_records(region_id, force=True)
+    dates = sorted({record.local_date for record in records})
     return {
         "status": "updated",
+        "region": region,
         "records": len(records),
         "period_start": dates[0] if dates else None,
         "period_end": dates[-1] if dates else None,

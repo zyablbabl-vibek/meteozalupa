@@ -4,7 +4,17 @@ import type { PointSummary } from "../types/weather";
 import { PointsTable } from "./PointsTable";
 
 const item: PointSummary = {
-  point: { id: "x", name: "Серышево", latitude: 51, longitude: 128 },
+  point: {
+    id: "x",
+    region_id: "amur-oblast",
+    name: "Серышево",
+    latitude: 51,
+    longitude: 128,
+    timezone: "Asia/Yakutsk",
+    point_type: "settlement",
+    is_regional_center: false,
+    weight: 1,
+  },
   mean_temperature: 10,
   models: { "ECMWF IFS": 10, "NOAA GFS": 11, "DWD ICON": null },
   minimum: 10,

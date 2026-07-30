@@ -1,0 +1,180 @@
+{
+  "regions": [
+    {
+      "id": "amur-oblast",
+      "name": "Амурская область",
+      "short_name": "Амурская область",
+      "name_prepositional": "Амурской области",
+      "name_genitive": "Амурской области",
+      "federal_district": "Дальневосточный федеральный округ",
+      "primary_timezone": "Asia/Yakutsk",
+      "default_point_id": "blagoveshchensk",
+      "map_center": {
+        "latitude": 53.5,
+        "longitude": 127.8
+      },
+      "map_zoom": 5,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "jewish-autonomous-oblast",
+      "name": "Еврейская автономная область",
+      "short_name": "Еврейская автономная область",
+      "name_prepositional": "Еврейской автономной области",
+      "name_genitive": "Еврейской автономной области",
+      "federal_district": "Дальневосточный федеральный округ",
+      "primary_timezone": "Asia/Vladivostok",
+      "default_point_id": "birobidzhan",
+      "map_center": {
+        "latitude": 48.6,
+        "longitude": 132.9
+      },
+      "map_zoom": 7,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "zabaykalsky-krai",
+      "name": "Забайкальский край",
+      "short_name": "Забайкальский край",
+      "name_prepositional": "Забайкальском крае",
+      "name_genitive": "Забайкальского края",
+      "federal_district": "Дальневосточный федеральный округ",
+      "primary_timezone": "Asia/Chita",
+      "default_point_id": "chita",
+      "map_center": {
+        "latitude": 53.8,
+        "longitude": 116.2
+      },
+      "map_zoom": 5,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "kamchatka-krai",
+      "name": "Камчатский край",
+      "short_name": "Камчатский край",
+      "name_prepositional": "Камчатском крае",
+      "name_genitive": "Камчатского края",
+      "federal_district": "Дальневосточный федеральный округ",
+      "primary_timezone": "Asia/Kamchatka",
+      "default_point_id": "petropavlovsk-kamchatsky",
+      "map_center": {
+        "latitude": 57.2,
+        "longitude": 160.2
+      },
+      "map_zoom": 5,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "magadan-oblast",
+      "name": "Магаданская область",
+      "short_name": "Магаданская область",
+      "name_prepositional": "Магаданской области",
+      "name_genitive": "Магаданской области",
+      "federal_district": "Дальневосточный федеральный округ",
+      "primary_timezone": "Asia/Magadan",
+      "default_point_id": "magadan",
+      "map_center": {
+        "latitude": 62.8,
+        "longitude": 153.4
+      },
+      "map_zoom": 5,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "primorsky-krai",
+      "name": "Приморский край",
+      "short_name": "Приморский край",
+      "name_prepositional": "Приморском крае",
+      "name_genitive": "Приморского края",
+      "federal_district": "Дальневосточный федеральный округ",
+      "primary_timezone": "Asia/Vladivostok",
+      "default_point_id": "vladivostok",
+      "map_center": {
+        "latitude": 44.2,
+        "longitude": 134.0
+      },
+      "map_zoom": 6,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "buryatia",
+      "name": "Республика Бурятия",
+      "short_name": "Республика Бурятия",
+      "name_prepositional": "Республике Бурятия",
+      "name_genitive": "Республики Бурятия",
+      "federal_district": "Дальневосточный федеральный округ",
+      "primary_timezone": "Asia/Irkutsk",
+      "default_point_id": "ulan-ude",
+      "map_center": {
+        "latitude": 53.5,
+        "longitude": 109.5
+      },
+      "map_zoom": 5,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "sakha-yakutia",
+      "name": "Республика Саха (Якутия)",
+      "short_name": "Республика Саха (Якутия)",
+      "name_prepositional": "Республике Саха (Якутия)",
+      "name_genitive": "Республики Саха (Якутия)",
+      "federal_district": "Дальневосточный федеральный округ",
+      "primary_timezone": "Asia/Yakutsk",
+      "default_point_id": "yakutsk",
+      "map_center": {
+        "latitude": 66.4,
+        "longitude": 129.2
+      },
+      "map_zoom": 3.4,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "sakhalin-oblast",
+      "name": "Сахалинская область",
+      "short_name": "Сахалинская область",
+      "name_prepositional": "Сахалинской области",
+      "name_genitive": "Сахалинской области",
+      "federal_district": "Дальневосточный федеральный округ",
+      "primary_timezone": "Asia/Sakhalin",
+      "default_point_id": "yuzhno-sakhalinsk",
+      "map_center": {
+        "latitude": 50.4,
+        "longitude": 143.2
+      },
+      "map_zoom": 5,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "khabarovsk-krai",
+      "name": "Хабаровский край",
+      "short_name": "Хабаровский край",
+      "name_prepositional": "Хабаровском крае",
+      "name_genitive": "Хабаровского края",
+      "federal_district": "Дальневосточный федеральный округ",
+      "primary_timezone": "Asia/Vladivostok",
+      "default_point_id": "khabarovsk",
+      "map_center": {
+        "latitude": 55.0,
+        "longitude": 136.0
+      },
+      "map_zoom": 4,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "chukotka-autonomous-okrug",
+      "name": "Чукотский автономный округ",
+      "short_name": "Чукотский автономный округ",
+      "name_prepositional": "Чукотском автономном округе",
+      "name_genitive": "Чукотского автономного округа",
+      "federal_district": "Дальневосточный федеральный округ",
+      "primary_timezone": "Asia/Anadyr",
+      "default_point_id": "anadyr",
+      "map_center": {
+        "latitude": 66.8,
+        "longitude": 172.0
+      },
+      "map_zoom": 4,
+      "data_status": "partially_verified"
+    }
+  ]
+}

@@ -6,9 +6,8 @@ from zoneinfo import ZoneInfo
 import httpx
 
 from app.config.models import METRICS, ModelConfig
+from app.config.settings import settings
 from app.schemas.forecast import ForecastRecord, Point
-
-LOCAL_TZ = ZoneInfo("Asia/Yakutsk")
 
 
 class ProviderError(RuntimeError):
@@ -17,10 +16,10 @@ class ProviderError(RuntimeError):
 
 class OpenMeteoProvider(ABC):
     config: ModelConfig
-    chunk_size = 20
 
     def __init__(self, client: httpx.AsyncClient):
         self.client = client
+        self.chunk_size = settings.open_meteo_batch_size
 
     async def fetch(
         self, points: list[Point], start_day: date, end_day: date | None = None
@@ -81,13 +80,16 @@ class OpenMeteoProvider(ABC):
 
             records.append(
                 ForecastRecord(
+                    region_id=point.region_id,
                     model=self.config.label,
                     point_id=point.id,
                     point_name=point.name,
+                    point_timezone=point.timezone,
                     latitude=point.latitude,
                     longitude=point.longitude,
                     forecast_time_utc=utc_time,
-                    forecast_time_local=utc_time.astimezone(LOCAL_TZ),
+                    forecast_time_local=utc_time.astimezone(ZoneInfo(point.timezone)),
+                    local_date=utc_time.astimezone(ZoneInfo(point.timezone)).date(),
                     fetched_at=fetched_at,
                     temperature_2m_c=value("temperature_2m"),
                     relative_humidity_2m_pct=value("relative_humidity_2m"),

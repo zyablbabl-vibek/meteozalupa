@@ -24,6 +24,54 @@ header {
   justify-content: space-between;
   gap: 24px;
 }
+.product-heading p {
+  margin: 10px 0 0;
+  color: #b9cfcb;
+  font-size: 0.8rem;
+}
+.header-actions {
+  display: flex;
+  align-items: end;
+  gap: 12px;
+}
+.region-picker {
+  display: grid;
+  gap: 7px;
+  min-width: min(360px, 42vw);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.region-picker select {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 36px 11px 12px;
+  border: 1px solid #adc1bd;
+  border-radius: 7px;
+  background: #fff;
+  color: #17343c;
+  font: inherit;
+  font-size: 0.9rem;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.header-actions .mode {
+  align-self: center;
+}
+.header-models {
+  display: grid;
+  gap: 3px;
+  align-self: center;
+  font-size: 0.66rem;
+}
+.header-models .available::before {
+  content: "● ";
+  color: #83c99f;
+}
+.header-models .missing::before {
+  content: "● ";
+  color: #e19a85;
+}
 h1,
 h2 {
   font-family: "PT Serif", Georgia, serif;
@@ -185,6 +233,15 @@ main {
   padding: 13px;
   margin: 16px 0;
 }
+.notice {
+  padding: 13px;
+  margin: 16px 0;
+  border-left: 4px solid #4c8b91;
+  background: #e5f1f1;
+}
+.region-state {
+  min-height: 360px;
+}
 .hero {
   display: grid;
   grid-template-columns: minmax(230px, 0.7fr) 2fr;
@@ -241,6 +298,11 @@ main {
   padding: 12px;
   border: 1px solid #dce5e1;
   border-radius: 14px;
+}
+.point-timezone {
+  margin: 6px 0 0;
+  color: #667c80;
+  font-size: 0.78rem;
 }
 .leaflet-container {
   height: 430px;
@@ -515,10 +577,25 @@ footer a {
   .leaflet-container {
     height: 350px;
   }
+  .header-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+  .region-picker {
+    min-width: 0;
+    width: 100%;
+  }
 }
 @media (max-width: 520px) {
   header {
     padding: 24px 18px;
+  }
+  .header-actions,
+  .header-actions button,
+  .region-picker,
+  .region-picker select {
+    width: 100%;
+    max-width: 100%;
   }
   .controls {
     align-items: stretch;

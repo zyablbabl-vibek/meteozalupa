@@ -1,5 +1,12 @@
-import { CircleMarker, MapContainer, TileLayer, Tooltip } from "react-leaflet";
-import type { PointSummary, Section } from "../types/weather";
+import type { GeoJsonObject } from "geojson";
+import {
+  CircleMarker,
+  GeoJSON,
+  MapContainer,
+  TileLayer,
+  Tooltip,
+} from "react-leaflet";
+import type { PointSummary, Region, Section } from "../types/weather";
 import { number, temperature } from "../utils/format";
 
 const color = (value: number) =>
@@ -11,23 +18,28 @@ const color = (value: number) =>
         ? "#d59632"
         : "#bd4b3e";
 
-export function WeatherMap({
+export function RegionMap({
+  region,
+  geojson,
   points,
   onSelect,
   section = "temperature",
 }: {
+  region: Region;
+  geojson?: GeoJsonObject;
   points: PointSummary[];
   onSelect: (id: string) => void;
   section?: Section;
 }) {
-  const markerValue = (item: PointSummary) =>
+  const markerValue = (item: PointSummary): number | null =>
     section === "precipitation"
-      ? (item.precipitation.mean ?? 0)
+      ? (item.precipitation.mean ?? null)
       : section === "wind"
-        ? (item.wind_speed.mean ?? 0)
+        ? (item.wind_speed.mean ?? null)
         : item.mean_temperature;
   const markerColor = (item: PointSummary) => {
     const value = markerValue(item);
+    if (value == null) return "#9da8a7";
     if (section === "precipitation")
       return value < 1
         ? "#a9c6cf"
@@ -46,23 +58,40 @@ export function WeatherMap({
             : "#a23835";
     return color(value);
   };
-  const radius = (item: PointSummary) =>
-    section === "wind"
-      ? 7 + Math.min(item.max_gust ?? 0, 15) / 2
-      : 7 +
-        Math.min(
-          section === "precipitation"
-            ? (item.precipitation.range ?? 0)
-            : item.spread,
-          10,
-        );
+  const radius = (item: PointSummary) => {
+    if (section === "wind") {
+      return item.max_gust == null ? 7 : 7 + Math.min(item.max_gust, 15) / 2;
+    }
+    if (section === "precipitation") {
+      return item.precipitation.range == null
+        ? 7
+        : 7 + Math.min(item.precipitation.range, 10);
+    }
+    return 7 + Math.min(item.spread, 10);
+  };
   return (
     <div className="map-wrap">
-      <MapContainer center={[52.2, 127.5]} zoom={5} scrollWheelZoom={false}>
+      <MapContainer
+        key={region.id}
+        center={[region.map_center_latitude, region.map_center_longitude]}
+        zoom={region.map_zoom}
+        scrollWheelZoom={false}
+      >
         <TileLayer
           attribution="&copy; OpenStreetMap contributors"
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         />
+        {geojson && (
+          <GeoJSON
+            data={geojson}
+            style={{
+              color: "#2c6e73",
+              weight: 2,
+              fillColor: "#78a99f",
+              fillOpacity: 0.08,
+            }}
+          />
+        )}
         {points.map((item) => (
           <CircleMarker
             key={item.point.id}
@@ -78,6 +107,8 @@ export function WeatherMap({
           >
             <Tooltip>
               <b>{item.point.name}</b>
+              <br />
+              Местное время: {item.point.timezone}
               <br />
               {section === "temperature" && (
                 <>

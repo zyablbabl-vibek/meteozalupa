@@ -22,21 +22,41 @@ export function PointDetails({
   dimPastHours?: boolean;
   section?: Section;
 }) {
-  const temps = data.series.temperature_2m.map((row) => ({
-    time: new Date(row.forecast_time_local).toLocaleTimeString("ru-RU", {
+  const localHour = (value: string) =>
+    new Intl.DateTimeFormat("ru-RU", {
       hour: "2-digit",
       minute: "2-digit",
-    }),
+      hourCycle: "h23",
+      timeZone: data.point.timezone,
+    }).format(new Date(value));
+  const localHourNumber = (value: string) =>
+    new Intl.DateTimeFormat("ru-RU", {
+      hour: "2-digit",
+      hourCycle: "h23",
+      timeZone: data.point.timezone,
+    }).format(new Date(value));
+  const pointOffset = new Intl.DateTimeFormat("ru-RU", {
+    timeZone: data.point.timezone,
+    timeZoneName: "shortOffset",
+  })
+    .formatToParts(new Date())
+    .find((part) => part.type === "timeZoneName")?.value;
+  const temps = data.series.temperature_2m.map((row) => ({
+    time: localHour(row.forecast_time_local),
     ECMWF: row.models["ECMWF IFS"],
     GFS: row.models["NOAA GFS"],
     ICON: row.models["DWD ICON"],
     mean: row.statistics.mean,
     min: row.statistics.minimum,
-    range: (row.statistics.maximum ?? 0) - (row.statistics.minimum ?? 0),
+    max: row.statistics.maximum,
+    range:
+      row.statistics.maximum != null && row.statistics.minimum != null
+        ? row.statistics.maximum - row.statistics.minimum
+        : null,
     isPast: dimPastHours && new Date(row.forecast_time_local) < new Date(),
   }));
   const rain = data.series.precipitation.map((row) => ({
-    time: new Date(row.forecast_time_local).getHours(),
+    time: localHourNumber(row.forecast_time_local),
     ECMWF: row.models["ECMWF IFS"],
     GFS: row.models["NOAA GFS"],
     ICON: row.models["DWD ICON"],
@@ -44,7 +64,7 @@ export function PointDetails({
     spread: row.statistics.range,
   }));
   const wind = data.series.wind_speed_10m.map((row, i) => ({
-    time: new Date(row.forecast_time_local).getHours(),
+    time: localHourNumber(row.forecast_time_local),
     speed: row.statistics.mean,
     gust: data.series.wind_gusts_10m[i]?.statistics.mean,
     ECMWF: row.models["ECMWF IFS"],
@@ -52,16 +72,19 @@ export function PointDetails({
     ICON: row.models["DWD ICON"],
   }));
   const gusts = data.series.wind_gusts_10m.map((row) => ({
-    time: new Date(row.forecast_time_local).getHours(),
+    time: localHourNumber(row.forecast_time_local),
     ECMWF: row.models["ECMWF IFS"],
     GFS: row.models["NOAA GFS"],
     ICON: row.models["DWD ICON"],
     mean: row.statistics.mean,
     min: row.statistics.minimum,
-    range: (row.statistics.maximum ?? 0) - (row.statistics.minimum ?? 0),
+    range:
+      row.statistics.maximum != null && row.statistics.minimum != null
+        ? row.statistics.maximum - row.statistics.minimum
+        : null,
   }));
   const directions = data.series.wind_direction_10m.map((row) => ({
-    time: new Date(row.forecast_time_local).getHours(),
+    time: localHourNumber(row.forecast_time_local),
     ECMWF: row.models["ECMWF IFS"],
     GFS: row.models["NOAA GFS"],
     ICON: row.models["DWD ICON"],
@@ -73,6 +96,10 @@ export function PointDetails({
         <div>
           <span className="eyebrow">Подробный прогноз</span>
           <h2>{data.point.name}</h2>
+          <p className="point-timezone">
+            Местное время точки: {data.point.timezone}
+            {pointOffset ? ` (${pointOffset})` : ""}
+          </p>
         </div>
       </div>
       {section === "temperature" && (
@@ -200,8 +227,12 @@ export function PointDetails({
                   key={row.time}
                   title={`ECMWF ${number(row.ECMWF, 0)}°, GFS ${number(row.GFS, 0)}°, ICON ${number(row.ICON, 0)}°`}
                 >
-                  <small>{row.time}:00</small>
-                  <b style={{ transform: `rotate(${row.mean ?? 0}deg)` }}>↑</b>
+                  <small>{row.time}</small>
+                  {row.mean == null ? (
+                    <b>—</b>
+                  ) : (
+                    <b style={{ transform: `rotate(${row.mean}deg)` }}>↑</b>
+                  )}
                   <em>{number(row.mean, 0)}°</em>
                 </span>
               ))}
@@ -232,7 +263,7 @@ export function PointDetails({
                   <td>{number(row.ICON)}°</td>
                   <td>{number(row.mean)}°</td>
                   <td>{number(row.min)}°</td>
-                  <td>{number((row.min ?? 0) + row.range)}°</td>
+                  <td>{number(row.max)}°</td>
                 </tr>
               ))}
             </tbody>

@@ -6,7 +6,7 @@ const formatter = new Intl.DateTimeFormat("ru-RU", {
   weekday: "short",
   day: "numeric",
   month: "short",
-  timeZone: "Asia/Yakutsk",
+  timeZone: "UTC",
 });
 
 export function DayCards({
@@ -29,7 +29,7 @@ export function DayCards({
           <span>
             {index === 0
               ? "Сегодня"
-              : formatter.format(new Date(`${day.date}T03:00:00+09:00`))}
+              : formatter.format(new Date(`${day.date}T00:00:00Z`))}
           </span>
           <strong>
             {temperature(day.minimum_temperature)}…{" "}

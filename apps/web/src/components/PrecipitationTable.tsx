@@ -21,7 +21,8 @@ export function PrecipitationTable({
           (point) =>
             !attentionOnly ||
             point.precipitation_analysis.daily_total.range! >= 10 ||
-            (point.precipitation_analysis.peak_value ?? 0) >= 3,
+            (point.precipitation_analysis.peak_value != null &&
+              point.precipitation_analysis.peak_value >= 3),
         )
         .sort((a, b) =>
           sort === "mean"
@@ -121,6 +122,8 @@ export function PrecipitationTable({
                         ).toLocaleTimeString("ru-RU", {
                           hour: "2-digit",
                           minute: "2-digit",
+                          timeZone: point.point.timezone,
+                          timeZoneName: "shortOffset",
                         })
                       : "Нет данных"}
                   </td>

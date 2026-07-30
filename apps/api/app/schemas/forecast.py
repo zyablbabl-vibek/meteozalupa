@@ -1,24 +1,26 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from pydantic import BaseModel
 
+from app.regions.schemas import ForecastPoint
 
-class Point(BaseModel):
-    id: str
-    name: str
-    latitude: float
-    longitude: float
+# Compatibility alias for provider and statistics code. The universal domain
+# name is ForecastPoint.
+Point = ForecastPoint
 
 
 class ForecastRecord(BaseModel):
+    region_id: str
     provider: str = "Open-Meteo"
     model: str
     point_id: str
     point_name: str
+    point_timezone: str
     latitude: float
     longitude: float
     forecast_time_utc: datetime
     forecast_time_local: datetime
+    local_date: date
     fetched_at: datetime
     model_run: datetime | None = None
     temperature_2m_c: float | None = None

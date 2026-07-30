@@ -9,6 +9,20 @@ from app.providers.icon import IconProvider
 from app.schemas.forecast import Point
 
 
+def point(point_id: str, latitude: float = 50, longitude: float = 127) -> Point:
+    return Point(
+        id=point_id,
+        region_id="amur-oblast",
+        name=point_id.upper(),
+        latitude=latitude,
+        longitude=longitude,
+        timezone="Asia/Yakutsk",
+        point_type="city",
+        is_regional_center=False,
+        weight=1,
+    )
+
+
 def response():
     return {
         "hourly": {
@@ -26,12 +40,14 @@ def response():
 
 
 def test_all_providers_normalize_to_same_schema():
-    point = Point(id="x", name="X", latitude=50, longitude=127)
+    forecast_point = point("x")
     for provider_type in (EcmwfProvider, GfsProvider, IconProvider):
         provider = provider_type(httpx.AsyncClient())
-        records = provider.normalize(response(), point, datetime.now(UTC))
+        records = provider.normalize(response(), forecast_point, datetime.now(UTC))
         assert records[0].temperature_2m_c == 12.5
         assert records[0].model == provider.config.label
+        assert records[0].point_timezone == "Asia/Yakutsk"
+        assert records[0].local_date == date(2026, 8, 1)
 
 
 @pytest.mark.asyncio
@@ -45,8 +61,8 @@ async def test_provider_fetch_uses_mocked_http_batch():
         provider = GfsProvider(client)
         records, raw = await provider.fetch(
             [
-                Point(id="a", name="A", latitude=50, longitude=127),
-                Point(id="b", name="B", latitude=51, longitude=128),
+                point("a"),
+                point("b", latitude=51, longitude=128),
             ],
             date(2026, 8, 1),
         )

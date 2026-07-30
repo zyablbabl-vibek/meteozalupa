@@ -6,15 +6,27 @@ describe("forecast URL state", () => {
     expect(
       readForecastUrl("?horizon=7d&date=2026-08-02&section=precipitation"),
     ).toEqual({
+      region: "amur-oblast",
       horizon: "7d",
       date: "2026-08-02",
       section: "precipitation",
+      view: "day",
+      point: null,
     });
   });
 
   it("serializes horizon and selected date", () => {
-    expect(forecastUrl("3d", "2026-07-31", "wind")).toBe(
-      "/?horizon=3d&date=2026-07-31&section=wind",
+    expect(
+      forecastUrl({
+        region: "primorsky-krai",
+        horizon: "3d",
+        date: "2026-07-31",
+        section: "wind",
+        view: "period",
+        point: "vladivostok",
+      }),
+    ).toBe(
+      "/?region=primorsky-krai&horizon=3d&date=2026-07-31&section=wind&view=period&point=vladivostok",
     );
   });
 });

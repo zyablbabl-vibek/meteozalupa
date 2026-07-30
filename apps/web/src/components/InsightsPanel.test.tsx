@@ -3,6 +3,25 @@ import { describe, expect, it } from "vitest";
 import { InsightsPanel } from "./InsightsPanel";
 
 const data = {
+  region: {
+    id: "amur-oblast",
+    name: "Амурская область",
+    short_name: "Амурская область",
+    name_prepositional: "Амурской области",
+    name_genitive: "Амурской области",
+    federal_district: "Дальневосточный федеральный округ",
+    primary_timezone: "Asia/Yakutsk",
+    has_multiple_timezones: false,
+    default_point_id: "blagoveshchensk",
+    map_center_latitude: 53.5,
+    map_center_longitude: 127.8,
+    map_zoom: 5,
+    data_status: "partially_verified" as const,
+    point_count: 20,
+    geojson_available: false,
+  },
+  region_id: "amur-oblast",
+  region_name: "Амурская область",
   horizon: "today" as const,
   period_start: "2026-07-31",
   period_end: "2026-07-31",

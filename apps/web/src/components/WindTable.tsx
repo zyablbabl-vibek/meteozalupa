@@ -20,8 +20,10 @@ export function WindTable({
         .filter(
           (point) =>
             !attentionOnly ||
-            (point.wind_analysis.maximum_gust.maximum ?? 0) >= 15 ||
-            (point.wind_analysis.maximum_direction_disagreement_deg ?? 0) >= 90,
+            (point.wind_analysis.maximum_gust.maximum != null &&
+              point.wind_analysis.maximum_gust.maximum >= 15) ||
+            (point.wind_analysis.maximum_direction_disagreement_deg != null &&
+              point.wind_analysis.maximum_direction_disagreement_deg >= 90),
         )
         .sort((a, b) => {
           const metric =
@@ -94,7 +96,8 @@ export function WindTable({
                 <tr
                   key={point.point.id}
                   className={
-                    (wind.maximum_direction_disagreement_deg ?? 0) >= 90
+                    wind.maximum_direction_disagreement_deg != null &&
+                    wind.maximum_direction_disagreement_deg >= 90
                       ? "direction-disagreement"
                       : ""
                   }
