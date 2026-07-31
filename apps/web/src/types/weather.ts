@@ -108,12 +108,12 @@ export type Hourly = {
   agreement: string;
 };
 export type DailyModelSummary = {
-  temperature_min: number;
-  temperature_max: number;
-  temperature_mean: number;
-  precipitation_sum: number;
-  wind_speed_mean: number;
-  wind_gust_max: number;
+  temperature_min: number | null;
+  temperature_max: number | null;
+  temperature_mean: number | null;
+  precipitation_sum: number | null;
+  wind_speed_mean: number | null;
+  wind_gust_max: number | null;
 };
 export type DailySummary = {
   date: string;
@@ -121,11 +121,11 @@ export type DailySummary = {
   mean_temperature: number;
   minimum_temperature: number;
   maximum_temperature: number;
-  precipitation_sum: number;
-  mean_wind_speed: number;
-  max_gust: number;
-  mean_humidity: number;
-  mean_pressure: number;
+  precipitation_sum: number | null;
+  mean_wind_speed: number | null;
+  max_gust: number | null;
+  mean_humidity: number | null;
+  mean_pressure: number | null;
   spread: number;
   agreement: string;
   models: Record<string, DailyModelSummary | null>;
@@ -155,6 +155,13 @@ export type PeriodSummary = {
     point: Point;
     models: Record<string, number | null>;
     statistics: Statistics;
+  };
+  regional_precipitation: {
+    models: Record<string, number | null>;
+    statistics: Statistics;
+    expected_days: number;
+    model_day_counts: Record<string, number>;
+    method: "weighted_spatial_mean_then_period_sum";
   };
   wind: {
     maximum_speed: Extreme;

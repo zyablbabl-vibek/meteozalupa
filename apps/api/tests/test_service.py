@@ -1,8 +1,17 @@
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
+import pytest
+
 from app.schemas.forecast import ForecastRecord
-from app.services.forecast import daily_model_aggregates, hourly
+from app.services.forecast import (
+    MODEL_LABELS,
+    daily_model_aggregates,
+    daily_summary,
+    hourly,
+    mock_records,
+    period_summary,
+)
 from app.statistics.core import daily_precipitation, numeric_consensus
 
 
@@ -53,3 +62,27 @@ def test_daily_aggregates_are_calculated_per_model_first():
     assert by_model["A"]["temperature_mean"] == 0.5
     assert by_model["A"]["precipitation_sum"] == 3
     assert by_model["B"]["precipitation_sum"] == 7
+
+
+def test_period_precipitation_sums_each_model_before_consensus():
+    start = date(2026, 8, 1)
+    dates = [start + timedelta(days=offset) for offset in range(3)]
+    records = mock_records("amur-oblast", dates[0], dates[-1])
+    summary = period_summary(records, dates)
+
+    expected_by_model = {
+        model: sum(
+            daily_summary(records, day)["models"][model]["precipitation_sum"]
+            for day in dates
+        )
+        for model in MODEL_LABELS
+    }
+    regional = summary["regional_precipitation"]
+
+    assert regional["models"] == pytest.approx(expected_by_model)
+    assert regional["statistics"]["mean"] == pytest.approx(
+        sum(expected_by_model.values()) / len(expected_by_model)
+    )
+    assert regional["expected_days"] == 3
+    assert regional["model_day_counts"] == dict.fromkeys(MODEL_LABELS, 3)
+    assert regional["method"] == "weighted_spatial_mean_then_period_sum"

@@ -433,6 +433,81 @@ tbody tr:hover {
   border-radius: 12px;
   padding: 18px;
 }
+.model-comparison {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(260px, 0.8fr) 2fr;
+  gap: 14px;
+}
+.chart-method-note {
+  padding: 18px;
+  border-radius: 12px;
+  background: #e9f1ee;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  font-size: 0.78rem;
+  line-height: 1.5;
+}
+.model-comparison-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.overview-charts .model-comparison-card {
+  min-width: 0;
+  padding: 14px;
+  border-width: 1px 1px 1px 5px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+}
+.model-comparison-card > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 5px;
+}
+.model-comparison-card strong {
+  font-size: 1.3rem;
+}
+.model-comparison-card small {
+  color: #64797c;
+  line-height: 1.35;
+}
+.model-color {
+  width: 9px;
+  height: 9px;
+  margin-top: 4px;
+  border-radius: 50%;
+  flex: none;
+}
+.chart-caption {
+  min-height: 36px;
+  margin: 4px 0 0;
+  color: #667c80;
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+.period-total {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.period-total > span,
+.period-total small {
+  color: #577075;
+}
+.period-total strong {
+  font-size: 1.35rem;
+}
+.period-total-models {
+  line-height: 1.5;
+}
+.period-total-maximum {
+  padding-top: 5px;
+  border-top: 1px solid #dbe5e2;
+}
 .period-extremes {
   margin-top: 18px;
   display: grid;
@@ -571,6 +646,9 @@ footer a {
   .period-extremes {
     grid-template-columns: 1fr;
   }
+  .model-comparison {
+    grid-template-columns: 1fr;
+  }
   .updated {
     margin-left: 0;
   }
@@ -634,6 +712,9 @@ footer a {
   .table-tools {
     align-items: flex-start;
     flex-direction: column;
+  }
+  .model-comparison-grid {
+    grid-template-columns: 1fr;
   }
   .segmented,
   .view-toggle {

@@ -13,6 +13,11 @@ import {
 } from "recharts";
 import type { DailySummary, PeriodSummary, Section } from "../types/weather";
 import { number, temperature } from "../utils/format";
+import {
+  PRECIPITATION_MODELS,
+  buildPeriodPrecipitationData,
+} from "../utils/periodPrecipitation";
+import { PeriodPrecipitationTotal } from "./PeriodPrecipitationTotal";
 
 const shortDate = (value: string) =>
   new Intl.DateTimeFormat("ru-RU", {
@@ -30,35 +35,15 @@ export function PeriodOverview({
   summary: PeriodSummary;
   section?: Section;
 }) {
-  const cumulative: Record<"ECMWF" | "GFS" | "ICON" | "mean", number | null> = {
-    ECMWF: null,
-    GFS: null,
-    ICON: null,
-    mean: null,
-  };
-  const accumulate = (current: number | null, next: number | null) =>
-    next == null ? current : current == null ? next : current + next;
-  const data = days.map((day) => {
-    const ECMWF = day.models["ECMWF IFS"]?.precipitation_sum ?? null;
-    const GFS = day.models["NOAA GFS"]?.precipitation_sum ?? null;
-    const ICON = day.models["DWD ICON"]?.precipitation_sum ?? null;
-    cumulative.ECMWF = accumulate(cumulative.ECMWF, ECMWF);
-    cumulative.GFS = accumulate(cumulative.GFS, GFS);
-    cumulative.ICON = accumulate(cumulative.ICON, ICON);
-    cumulative.mean = accumulate(cumulative.mean, day.precipitation_sum);
+  const precipitationData = buildPeriodPrecipitationData(days);
+  const data = days.map((day, index) => {
+    const precipitation = precipitationData[index];
     return {
-      date: shortDate(day.date),
+      ...precipitation,
+      date: shortDate(precipitation.date),
       min: day.minimum_temperature,
       max: day.maximum_temperature,
       mean: day.mean_temperature,
-      ECMWF,
-      GFS,
-      ICON,
-      rain: day.precipitation_sum,
-      cumECMWF: cumulative.ECMWF,
-      cumGFS: cumulative.GFS,
-      cumICON: cumulative.ICON,
-      cumMean: cumulative.mean,
       windECMWF: day.models["ECMWF IFS"]?.wind_speed_mean,
       windGFS: day.models["NOAA GFS"]?.wind_speed_mean,
       windICON: day.models["DWD ICON"]?.wind_speed_mean,
@@ -69,6 +54,8 @@ export function PeriodOverview({
       gust: day.max_gust,
     };
   });
+  const regionalPrecipitation = summary.regional_precipitation;
+  const regionalConsensus = regionalPrecipitation.statistics.mean;
   return (
     <section className="period-overview">
       <div className="section-heading">
@@ -131,61 +118,159 @@ export function PeriodOverview({
         )}
         {section === "precipitation" && (
           <>
+            <div className="model-comparison">
+              <div className="chart-method-note">
+                <strong>Как читать графики</strong>
+                <span>
+                  Цвет — отдельная модель, светлая зона — диапазон между
+                  минимальной и максимальной оценкой, тёмная линия — консенсус.
+                  Осадки усредняются по контрольным точкам, а не складываются
+                  между ними.
+                </span>
+              </div>
+              <div className="model-comparison-grid">
+                {PRECIPITATION_MODELS.map((model) => {
+                  const value = regionalPrecipitation.models[model.key];
+                  const difference =
+                    value != null && regionalConsensus != null
+                      ? value - regionalConsensus
+                      : null;
+                  const differencePercent =
+                    difference != null &&
+                    regionalConsensus != null &&
+                    regionalConsensus !== 0
+                      ? (difference / regionalConsensus) * 100
+                      : null;
+                  return (
+                    <article
+                      key={model.key}
+                      className="model-comparison-card"
+                      style={{
+                        borderColor: model.color,
+                        background: model.background,
+                      }}
+                    >
+                      <span
+                        className="model-color"
+                        style={{ background: model.color }}
+                      />
+                      <div>
+                        <b>{model.label}</b>
+                        <small>{model.description}</small>
+                        <strong>{number(value)} мм</strong>
+                        <small>
+                          {difference == null
+                            ? "Недостаточно данных за весь период"
+                            : Math.abs(difference) < 0.05
+                              ? "Совпадает с консенсусом"
+                              : `${difference >= 0 ? "+" : ""}${number(
+                                  difference,
+                                )} мм (${difference >= 0 ? "+" : ""}${number(
+                                  differencePercent,
+                                  0,
+                                )}%) к консенсусу`}
+                        </small>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            </div>
             <article>
-              <h3>Осадки по моделям</h3>
+              <h3>Средняя суточная сумма по региону</h3>
               <div className="small-chart">
                 <ResponsiveContainer>
                   <ComposedChart data={data}>
+                    <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" />
-                    <YAxis unit=" мм" />
+                    <YAxis unit=" мм" domain={[0, "auto"]} />
                     <Tooltip />
                     <Legend />
-                    <Line dataKey="ECMWF" stroke="#326789" />
-                    <Line dataKey="GFS" stroke="#c87a34" />
-                    <Line dataKey="ICON" stroke="#71864b" />
+                    <Area
+                      type="monotone"
+                      dataKey="dailyBand"
+                      name="Диапазон моделей"
+                      stroke="#c5b99f"
+                      fill="#e8e2d5"
+                      fillOpacity={0.8}
+                    />
+                    {PRECIPITATION_MODELS.map((model) => (
+                      <Bar
+                        key={model.key}
+                        dataKey={model.dataKey}
+                        name={model.label}
+                        fill={model.color}
+                        fillOpacity={0.78}
+                        maxBarSize={20}
+                      />
+                    ))}
                     <Line
-                      dataKey="rain"
-                      name="Среднее"
+                      type="monotone"
+                      dataKey="dailyConsensus"
+                      name="Консенсус"
                       stroke="#173b45"
                       strokeWidth={3}
+                      dot={{ r: 3 }}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
+              <p className="chart-caption">
+                Столбцы показывают среднюю суточную сумму каждой модели по
+                контрольным точкам региона.
+              </p>
             </article>
             <article>
-              <h3>Накопительные осадки</h3>
+              <h3>Накопление за выбранный период</h3>
               <div className="small-chart">
                 <ResponsiveContainer>
                   <ComposedChart data={data}>
+                    <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="date" />
-                    <YAxis unit=" мм" />
+                    <YAxis unit=" мм" domain={[0, "auto"]} />
                     <Tooltip />
                     <Legend />
+                    <Area
+                      type="monotone"
+                      dataKey="cumulativeBand"
+                      name="Диапазон моделей"
+                      stroke="#b8c9c5"
+                      fill="#dce9e5"
+                      fillOpacity={0.78}
+                    />
                     <Line
                       dataKey="cumECMWF"
-                      name="ECMWF накоплено"
-                      stroke="#326789"
+                      name="ECMWF"
+                      stroke={PRECIPITATION_MODELS[0].color}
+                      strokeWidth={2}
                     />
                     <Line
                       dataKey="cumGFS"
-                      name="GFS накоплено"
-                      stroke="#c87a34"
+                      name="GFS"
+                      stroke={PRECIPITATION_MODELS[1].color}
+                      strokeWidth={2}
                     />
                     <Line
                       dataKey="cumICON"
-                      name="ICON накоплено"
-                      stroke="#71864b"
+                      name="ICON"
+                      stroke={PRECIPITATION_MODELS[2].color}
+                      strokeWidth={2}
                     />
                     <Line
-                      dataKey="cumMean"
-                      name="Среднее накоплено"
+                      dataKey="cumulativeConsensus"
+                      name="Консенсус после накопления"
                       stroke="#173b45"
-                      strokeWidth={3}
+                      strokeWidth={3.5}
+                      dot={{ r: 3 }}
                     />
                   </ComposedChart>
                 </ResponsiveContainer>
               </div>
+              <p className="chart-caption">
+                Каждая модель накапливается отдельно. Пропущенный день не
+                подменяется нулём; итоговый консенсус строится после
+                суммирования.
+              </p>
             </article>
           </>
         )}
@@ -249,13 +334,11 @@ export function PeriodOverview({
             {summary.temperature.absolute_minimum.model}
           </strong>
         </p>
-        <p>
-          Осадки за период:{" "}
-          <strong>
-            {number(summary.precipitation.statistics.mean)} мм ·{" "}
-            {summary.precipitation.point.name}
-          </strong>
-        </p>
+        <PeriodPrecipitationTotal
+          dayCount={days.length}
+          regional={summary.regional_precipitation}
+          wettestPoint={summary.precipitation}
+        />
       </div>
     </section>
   );

@@ -507,20 +507,48 @@ def daily_summary(records: list[ForecastRecord], day: date) -> dict:
     if not point_data:
         return {"date": day, "available": False}
     model_rows = daily_model_aggregates(day_records)
-    models: dict[str, dict[str, float] | None] = {}
+    weight_by_point = {point.id: point.weight for point in points(day_records[0].region_id)}
+
+    def available_values(rows: list[dict], field: str) -> list[float]:
+        return [row[field] for row in rows if row[field] is not None]
+
+    def weighted_mean(rows: list[dict], field: str) -> float | None:
+        weighted = [
+            (row[field], weight_by_point[row["point_id"]])
+            for row in rows
+            if row[field] is not None and row["point_id"] in weight_by_point
+        ]
+        if not weighted:
+            return None
+        return sum(value * weight for value, weight in weighted) / sum(
+            weight for _, weight in weighted
+        )
+
+    models: dict[str, dict[str, float | None] | None] = {}
     for model in MODEL_LABELS:
         rows = [row for row in model_rows if row["model"] == model]
         if not rows:
             models[model] = None
             continue
+        temperature_mins = available_values(rows, "temperature_min")
+        temperature_maxes = available_values(rows, "temperature_max")
+        gusts_by_model = available_values(rows, "wind_gust_max")
         models[model] = {
-            "temperature_min": min(row["temperature_min"] for row in rows),
-            "temperature_max": max(row["temperature_max"] for row in rows),
-            "temperature_mean": statistics.fmean(row["temperature_mean"] for row in rows),
-            "precipitation_sum": statistics.fmean(row["precipitation_sum"] for row in rows),
-            "wind_speed_mean": statistics.fmean(row["wind_speed_mean"] for row in rows),
-            "wind_gust_max": max(row["wind_gust_max"] for row in rows),
+            "temperature_min": min(temperature_mins) if temperature_mins else None,
+            "temperature_max": max(temperature_maxes) if temperature_maxes else None,
+            "temperature_mean": weighted_mean(rows, "temperature_mean"),
+            # Regional precipitation is a weighted spatial mean. Values from
+            # different points are never added together.
+            "precipitation_sum": weighted_mean(rows, "precipitation_sum"),
+            "wind_speed_mean": weighted_mean(rows, "wind_speed_mean"),
+            "wind_gust_max": max(gusts_by_model) if gusts_by_model else None,
         }
+    regional_precipitation_daily = numeric_consensus(
+        {
+            model: values["precipitation_sum"] if values is not None else None
+            for model, values in models.items()
+        }
+    )
     spreads = [item["spread"] for item in point_data]
 
     def point_mean(metric: str) -> float | None:
@@ -539,7 +567,7 @@ def daily_summary(records: list[ForecastRecord], day: date) -> dict:
         "mean_temperature": statistics.fmean(item["mean_temperature"] for item in point_data),
         "minimum_temperature": min(item["minimum"] for item in point_data),
         "maximum_temperature": max(item["maximum"] for item in point_data),
-        "precipitation_sum": point_mean("precipitation"),
+        "precipitation_sum": regional_precipitation_daily.get("mean"),
         "mean_wind_speed": point_mean("wind_speed"),
         "max_gust": max(gusts) if gusts else None,
         "mean_humidity": point_mean("humidity"),
@@ -572,14 +600,20 @@ def period_summary(records: list[ForecastRecord], dates: list[date]) -> dict:
     for point in points(region_id) if region_id else []:
         values: dict[str, float | None] = {}
         for model in MODEL_LABELS:
+            model_rows = [
+                row
+                for row in aggregates
+                if row["model"] == model and row["point_id"] == point.id
+            ]
             model_totals = [
                 row["precipitation_sum"]
-                for row in aggregates
-                if row["model"] == model
-                and row["point_id"] == point.id
-                and row["precipitation_sum"] is not None
+                for row in model_rows
+                if row["precipitation_sum"] is not None
             ]
-            values[model] = sum(model_totals) if model_totals else None
+            complete_days = {row["date"] for row in model_rows} == set(dates)
+            values[model] = (
+                sum(model_totals) if complete_days and len(model_totals) == len(dates) else None
+            )
         stats = numeric_consensus(values)
         if stats.get("consensus_available"):
             precipitation_points.append(
@@ -592,6 +626,21 @@ def period_summary(records: list[ForecastRecord], dates: list[date]) -> dict:
     )
     if not available:
         return {"available": False}
+    regional_precipitation_by_model: dict[str, float | None] = {}
+    regional_model_day_counts: dict[str, int] = {}
+    for model in MODEL_LABELS:
+        daily_values = [
+            item["models"][model]["precipitation_sum"]
+            for item in summaries
+            if item.get("available")
+            and item["models"].get(model) is not None
+            and item["models"][model]["precipitation_sum"] is not None
+        ]
+        regional_model_day_counts[model] = len(daily_values)
+        regional_precipitation_by_model[model] = (
+            sum(daily_values) if len(daily_values) == len(dates) else None
+        )
+    regional_precipitation_stats = numeric_consensus(regional_precipitation_by_model)
     warmest = max(available, key=lambda item: item["mean_temperature"])
     coldest = min(available, key=lambda item: item["mean_temperature"])
     wettest = max(available, key=lambda item: item["precipitation_sum"])
@@ -637,6 +686,13 @@ def period_summary(records: list[ForecastRecord], dates: list[date]) -> dict:
             "mean_statistics": temperature_stats,
         },
         "precipitation": wettest_point,
+        "regional_precipitation": {
+            "models": regional_precipitation_by_model,
+            "statistics": regional_precipitation_stats,
+            "expected_days": len(dates),
+            "model_day_counts": regional_model_day_counts,
+            "method": "weighted_spatial_mean_then_period_sum",
+        },
         "wind": {
             "maximum_speed": _extreme(
                 selected, "wind_speed_10m_ms", "max", "wind_speed_10m", "m/s"
