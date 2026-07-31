@@ -56,8 +56,15 @@ export function RegionHeader({
           </div>
         )}
         {dataMode && (
-          <span className={`mode ${dataMode}`}>
-            {dataMode === "mock" ? "Mock" : "Live"}
+          <span
+            className={`mode ${dataMode}`}
+            title={
+              dataMode === "mock"
+                ? "Детерминированные демонстрационные данные"
+                : "Живой прогноз ECMWF, GFS и ICON через Open-Meteo"
+            }
+          >
+            {dataMode === "mock" ? "Демо-данные" : "Live · Open-Meteo"}
           </span>
         )}
       </div>

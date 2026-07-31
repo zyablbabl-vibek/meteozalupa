@@ -20,13 +20,22 @@ def test_ttl_cache_returns_fresh_and_rejects_expired():
         local_date=day,
         fetched_at=datetime.now(UTC),
     )
-    save("amur-oblast", day, [record], {"ECMWF IFS": [{"test": True}]}, "Asia/Yakutsk")
-    assert len(load_fresh("amur-oblast", day, 3600)) == 1
-    assert load_fresh("primorsky-krai", day, 3600) == []
-    assert load_fresh("amur-oblast", day, -1) == []
+    save(
+        "amur-oblast",
+        day,
+        [record],
+        {"ECMWF IFS": [{"test": True}]},
+        "Asia/Yakutsk",
+        "live",
+    )
+    assert len(load_fresh("amur-oblast", day, 3600, "live")) == 1
+    assert load_fresh("amur-oblast", day, 3600, "mock") == []
+    assert load_fresh("primorsky-krai", day, 3600, "live") == []
+    assert load_fresh("amur-oblast", day, -1, "live") == []
 
 
 async def test_horizon_switch_reuses_single_seven_day_cache(monkeypatch):
+    monkeypatch.setattr(forecast.settings, "data_mode", "mock")
     calls = 0
     original = forecast.mock_records
 

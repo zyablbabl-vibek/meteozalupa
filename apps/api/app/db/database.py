@@ -37,6 +37,7 @@ class ForecastCache(Base):
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     region_id: Mapped[str] = mapped_column(String(80), index=True)
+    source: Mapped[str] = mapped_column(String(16), index=True)
     day: Mapped[date] = mapped_column(Date, index=True)
     local_date: Mapped[date | None] = mapped_column(Date, index=True)
     model: Mapped[str] = mapped_column(String(40), index=True)
@@ -103,6 +104,13 @@ def _migrate_legacy_cache() -> None:
                 connection.execute(
                     text("UPDATE forecast_cache SET local_date = day WHERE local_date IS NULL")
                 )
+            if table_name == "forecast_cache" and "source" not in columns:
+                connection.execute(
+                    text(
+                        "ALTER TABLE forecast_cache ADD COLUMN source "
+                        "VARCHAR(16) NOT NULL DEFAULT 'mock'"
+                    )
+                )
         connection.execute(
             text(
                 "CREATE INDEX IF NOT EXISTS ix_forecast_region_local_date_v2 "
@@ -155,12 +163,15 @@ _migrate_legacy_cache()
 _sync_region_catalog()
 
 
-def load_fresh(region_id: str, period_start: date, ttl_seconds: int) -> list[ForecastRecord]:
+def load_fresh(
+    region_id: str, period_start: date, ttl_seconds: int, source: str
+) -> list[ForecastRecord]:
     cutoff = datetime.now(UTC) - timedelta(seconds=ttl_seconds)
     with Session(engine) as session:
         rows = session.scalars(
             select(ForecastCache).where(
                 ForecastCache.region_id == region_id,
+                ForecastCache.source == source,
                 ForecastCache.day == period_start,
                 ForecastCache.fetched_at >= cutoff,
             )
@@ -181,6 +192,7 @@ def save(
     records: list[ForecastRecord],
     raw: dict[str, list[dict]],
     primary_timezone: str,
+    source: str,
 ) -> None:
     with Session(engine) as session:
         session.execute(
@@ -196,6 +208,7 @@ def save(
         session.add_all(
             ForecastCache(
                 region_id=region_id,
+                source=source,
                 day=period_start,
                 local_date=r.local_date,
                 model=r.model,
@@ -222,6 +235,7 @@ def save(
                         ).isoformat(),
                         "region_id": region_id,
                         "primary_timezone": primary_timezone,
+                        "source": source,
                         "responses": payload,
                     }
                 ),

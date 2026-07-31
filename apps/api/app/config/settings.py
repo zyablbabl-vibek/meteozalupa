@@ -7,7 +7,7 @@ ROOT = Path(__file__).resolve().parents[4]
 
 
 class Settings(BaseSettings):
-    data_mode: Literal["mock", "live"] = "mock"
+    data_mode: Literal["mock", "live"] = "live"
     forecast_cache_ttl_seconds: int = 10800
     database_url: str = "sqlite:///./data/weather.db"
     log_level: str = "INFO"

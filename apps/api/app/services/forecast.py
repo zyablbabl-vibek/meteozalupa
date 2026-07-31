@@ -83,6 +83,7 @@ def mock_records(
                     result.append(
                         ForecastRecord(
                             region_id=region_id,
+                            provider="Mock",
                             model=model,
                             point_id=point.id,
                             point_name=point.name,
@@ -132,7 +133,12 @@ async def get_records(
     start = current_local_date(region.primary_timezone)
     end = start + timedelta(days=6)
     if not force:
-        cached = load_fresh(region_id, start, settings.forecast_cache_ttl_seconds)
+        cached = load_fresh(
+            region_id,
+            start,
+            settings.forecast_cache_ttl_seconds,
+            settings.data_mode,
+        )
         cached_days = {record.local_date for record in cached}
         if len(cached_days) == 7:
             return cached, []
@@ -144,6 +150,7 @@ async def get_records(
             mock_data,
             {"mock": [{"deterministic": True, "days": 7, "region_id": region_id}]},
             region.primary_timezone,
+            "mock",
         )
         return mock_data, []
     errors: list[str] = []
@@ -176,7 +183,7 @@ async def get_records(
                 )
                 raw[provider.config.label] = provider_raw
     if records:
-        save(region_id, start, records, raw, region.primary_timezone)
+        save(region_id, start, records, raw, region.primary_timezone, "live")
     return records, errors
 
 
