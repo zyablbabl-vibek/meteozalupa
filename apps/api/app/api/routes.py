@@ -31,7 +31,9 @@ from app.services.insights import build_insights
 router = APIRouter(prefix="/api")
 HorizonQuery = Annotated[str, Query(description="today, 3d или 7d")]
 DateQuery = Annotated[date | None, Query()]
-RegionQuery = Annotated[str, Query(description="Стабильный id региона ДФО")]
+RegionQuery = Annotated[
+    str, Query(description="Стабильный id региона поддерживаемых федеральных округов")
+]
 
 
 def resolve_region(region_id: str) -> RegionMetadata:

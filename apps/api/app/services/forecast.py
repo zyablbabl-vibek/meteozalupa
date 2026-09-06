@@ -60,8 +60,7 @@ def mock_records(
                     day_wave = math.sin(day_offset * math.pi / 3) * 2.2
                     deviation = (model_index - 1) * (
                         4.5
-                        if (point.id == "tynda" or region_id == "sakha-yakutia")
-                        and day_offset == 2
+                        if (point.id == "tynda" or region_id == "sakha-yakutia") and day_offset == 2
                         else 0.7
                     )
                     rain = (
@@ -95,12 +94,7 @@ def mock_records(
                             local_date=day,
                             fetched_at=fetched,
                             temperature_2m_c=(
-                                15
-                                + region_bias
-                                + phase * 9
-                                + day_wave
-                                - p_index * 0.18
-                                + deviation
+                                15 + region_bias + phase * 9 + day_wave - p_index * 0.18 + deviation
                             ),
                             relative_humidity_2m_pct=65 - phase * 18 + model_index * 2,
                             pressure_msl_hpa=1008 + math.sin(hour / 4) * 3 + model_index,
@@ -177,9 +171,7 @@ async def get_records(
             else:
                 provider_records, provider_raw = result
                 records.extend(
-                    record
-                    for record in provider_records
-                    if start <= record.local_date <= end
+                    record for record in provider_records if start <= record.local_date <= end
                 )
                 raw[provider.config.label] = provider_raw
     if records:
@@ -560,9 +552,7 @@ def daily_summary(records: list[ForecastRecord], day: date) -> dict:
 
     def point_mean(metric: str) -> float | None:
         available = [
-            item[metric]["mean"]
-            for item in point_data
-            if item[metric].get("mean") is not None
+            item[metric]["mean"] for item in point_data if item[metric].get("mean") is not None
         ]
         return statistics.fmean(available) if available else None
 
@@ -608,9 +598,7 @@ def period_summary(records: list[ForecastRecord], dates: list[date]) -> dict:
         values: dict[str, float | None] = {}
         for model in MODEL_LABELS:
             model_rows = [
-                row
-                for row in aggregates
-                if row["model"] == model and row["point_id"] == point.id
+                row for row in aggregates if row["model"] == model and row["point_id"] == point.id
             ]
             model_totals = [
                 row["precipitation_sum"]

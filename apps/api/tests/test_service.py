@@ -72,8 +72,7 @@ def test_period_precipitation_sums_each_model_before_consensus():
 
     expected_by_model = {
         model: sum(
-            daily_summary(records, day)["models"][model]["precipitation_sum"]
-            for day in dates
+            daily_summary(records, day)["models"][model]["precipitation_sum"] for day in dates
         )
         for model in MODEL_LABELS
     }

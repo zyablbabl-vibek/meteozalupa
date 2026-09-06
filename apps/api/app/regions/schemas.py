@@ -60,4 +60,3 @@ class RegionMetadata(BaseModel):
     data_status: DataStatus
     point_count: int
     geojson_available: bool
-

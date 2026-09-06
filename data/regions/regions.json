@@ -1,6 +1,22 @@
 {
   "regions": [
     {
+      "id": "altai-krai",
+      "name": "Алтайский край",
+      "short_name": "Алтайский край",
+      "name_prepositional": "Алтайском крае",
+      "name_genitive": "Алтайского края",
+      "federal_district": "Сибирский федеральный округ",
+      "primary_timezone": "Asia/Barnaul",
+      "default_point_id": "barnaul",
+      "map_center": {
+        "latitude": 52.4941,
+        "longitude": 82.4515
+      },
+      "map_zoom": 5.5,
+      "data_status": "partially_verified"
+    },
+    {
       "id": "amur-oblast",
       "name": "Амурская область",
       "short_name": "Амурская область",
@@ -49,6 +65,22 @@
       "data_status": "partially_verified"
     },
     {
+      "id": "irkutsk-oblast",
+      "name": "Иркутская область",
+      "short_name": "Иркутская область",
+      "name_prepositional": "Иркутской области",
+      "name_genitive": "Иркутской области",
+      "federal_district": "Сибирский федеральный округ",
+      "primary_timezone": "Asia/Irkutsk",
+      "default_point_id": "irkutsk",
+      "map_center": {
+        "latitude": 56.3976,
+        "longitude": 106.4782
+      },
+      "map_zoom": 4.5,
+      "data_status": "partially_verified"
+    },
+    {
       "id": "kamchatka-krai",
       "name": "Камчатский край",
       "short_name": "Камчатский край",
@@ -62,6 +94,38 @@
         "longitude": 160.2
       },
       "map_zoom": 5,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "kemerovo-oblast-kuzbass",
+      "name": "Кемеровская область — Кузбасс",
+      "short_name": "Кемеровская область — Кузбасс",
+      "name_prepositional": "Кемеровской области — Кузбассе",
+      "name_genitive": "Кемеровской области — Кузбасса",
+      "federal_district": "Сибирский федеральный округ",
+      "primary_timezone": "Asia/Novokuznetsk",
+      "default_point_id": "kemerovo",
+      "map_center": {
+        "latitude": 54.5271,
+        "longitude": 86.9615
+      },
+      "map_zoom": 6,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "krasnoyarsk-krai",
+      "name": "Красноярский край",
+      "short_name": "Красноярский край",
+      "name_prepositional": "Красноярском крае",
+      "name_genitive": "Красноярского края",
+      "federal_district": "Сибирский федеральный округ",
+      "primary_timezone": "Asia/Krasnoyarsk",
+      "default_point_id": "krasnoyarsk",
+      "map_center": {
+        "latitude": 63.3204,
+        "longitude": 91.5001
+      },
+      "map_zoom": 3.5,
       "data_status": "partially_verified"
     },
     {
@@ -81,6 +145,38 @@
       "data_status": "partially_verified"
     },
     {
+      "id": "novosibirsk-oblast",
+      "name": "Новосибирская область",
+      "short_name": "Новосибирская область",
+      "name_prepositional": "Новосибирской области",
+      "name_genitive": "Новосибирской области",
+      "federal_district": "Сибирский федеральный округ",
+      "primary_timezone": "Asia/Novosibirsk",
+      "default_point_id": "novosibirsk",
+      "map_center": {
+        "latitude": 55.0888,
+        "longitude": 80.1471
+      },
+      "map_zoom": 5.5,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "omsk-oblast",
+      "name": "Омская область",
+      "short_name": "Омская область",
+      "name_prepositional": "Омской области",
+      "name_genitive": "Омской области",
+      "federal_district": "Сибирский федеральный округ",
+      "primary_timezone": "Asia/Omsk",
+      "default_point_id": "omsk",
+      "map_center": {
+        "latitude": 55.7367,
+        "longitude": 73.2116
+      },
+      "map_zoom": 5.5,
+      "data_status": "partially_verified"
+    },
+    {
       "id": "primorsky-krai",
       "name": "Приморский край",
       "short_name": "Приморский край",
@@ -92,6 +188,22 @@
       "map_center": {
         "latitude": 44.2,
         "longitude": 134.0
+      },
+      "map_zoom": 6,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "altai-republic",
+      "name": "Республика Алтай",
+      "short_name": "Республика Алтай",
+      "name_prepositional": "Республике Алтай",
+      "name_genitive": "Республики Алтай",
+      "federal_district": "Сибирский федеральный округ",
+      "primary_timezone": "Asia/Barnaul",
+      "default_point_id": "gorno-altaysk",
+      "map_center": {
+        "latitude": 51.0876,
+        "longitude": 86.9802
       },
       "map_zoom": 6,
       "data_status": "partially_verified"
@@ -129,6 +241,38 @@
       "data_status": "partially_verified"
     },
     {
+      "id": "tyva-republic",
+      "name": "Республика Тыва",
+      "short_name": "Республика Тыва",
+      "name_prepositional": "Республике Тыва",
+      "name_genitive": "Республики Тыва",
+      "federal_district": "Сибирский федеральный округ",
+      "primary_timezone": "Asia/Krasnoyarsk",
+      "default_point_id": "kyzyl",
+      "map_center": {
+        "latitude": 51.2592,
+        "longitude": 93.7018
+      },
+      "map_zoom": 5.5,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "khakassia-republic",
+      "name": "Республика Хакасия",
+      "short_name": "Республика Хакасия",
+      "name_prepositional": "Республике Хакасия",
+      "name_genitive": "Республики Хакасия",
+      "federal_district": "Сибирский федеральный округ",
+      "primary_timezone": "Asia/Krasnoyarsk",
+      "default_point_id": "abakan",
+      "map_center": {
+        "latitude": 53.6534,
+        "longitude": 90.1156
+      },
+      "map_zoom": 6,
+      "data_status": "partially_verified"
+    },
+    {
       "id": "sakhalin-oblast",
       "name": "Сахалинская область",
       "short_name": "Сахалинская область",
@@ -140,6 +284,22 @@
       "map_center": {
         "latitude": 50.4,
         "longitude": 143.2
+      },
+      "map_zoom": 5,
+      "data_status": "partially_verified"
+    },
+    {
+      "id": "tomsk-oblast",
+      "name": "Томская область",
+      "short_name": "Томская область",
+      "name_prepositional": "Томской области",
+      "name_genitive": "Томской области",
+      "federal_district": "Сибирский федеральный округ",
+      "primary_timezone": "Asia/Tomsk",
+      "default_point_id": "tomsk",
+      "map_center": {
+        "latitude": 58.239,
+        "longitude": 82.3297
       },
       "map_zoom": 5,
       "data_status": "partially_verified"

@@ -10,7 +10,7 @@ def test_region_endpoints_return_registry_and_points():
     response = client.get("/api/regions")
     assert response.status_code == 200
     regions = response.json()["regions"]
-    assert len(regions) == 11
+    assert len(regions) == 21
     assert [item["name"] for item in regions] == sorted(item["name"] for item in regions)
 
     detail = client.get("/api/regions/sakha-yakutia")
@@ -19,9 +19,11 @@ def test_region_endpoints_return_registry_and_points():
 
     points = client.get("/api/regions/primorsky-krai/points")
     assert points.status_code == 200
-    assert all(
-        item["region_id"] == "primorsky-krai" for item in points.json()["points"]
-    )
+    assert all(item["region_id"] == "primorsky-krai" for item in points.json()["points"])
+
+    siberian = client.get("/api/regions/krasnoyarsk-krai")
+    assert siberian.status_code == 200
+    assert siberian.json()["federal_district"] == "Сибирский федеральный округ"
 
 
 def test_unknown_region_and_cross_region_point_are_rejected():
@@ -42,8 +44,7 @@ def test_forecast_summary_and_insights_are_scoped_to_region():
     payload = forecast.json()
     assert payload["region_id"] == "jewish-autonomous-oblast"
     assert all(
-        point["point"]["region_id"] == "jewish-autonomous-oblast"
-        for point in payload["points"]
+        point["point"]["region_id"] == "jewish-autonomous-oblast" for point in payload["points"]
     )
 
     summary = client.get("/api/summary", params=params)

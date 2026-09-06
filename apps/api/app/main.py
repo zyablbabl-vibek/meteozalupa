@@ -14,9 +14,9 @@ logging.basicConfig(
     level=settings.log_level,
     format='{"time":"%(asctime)s","level":"%(levelname)s","message":"%(message)s"}',
 )
-logger = logging.getLogger("far-east-weather")
+logger = logging.getLogger("regional-weather")
 
-app = FastAPI(title="Погода Дальнего Востока API", version="0.2.0")
+app = FastAPI(title="Погода ДФО и СФО API", version="0.3.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[

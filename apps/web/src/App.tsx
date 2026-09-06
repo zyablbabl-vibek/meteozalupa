@@ -198,7 +198,7 @@ export default function App() {
     return (
       <main className="state">
         <div className="loader" />
-        <h1>Загружаем регионы Дальнего Востока…</h1>
+        <h1>Загружаем регионы ДФО и СФО…</h1>
       </main>
     );
   }

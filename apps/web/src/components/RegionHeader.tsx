@@ -23,10 +23,11 @@ export function RegionHeader({
   return (
     <header>
       <div className="product-heading">
-        <span className="eyebrow">Погода Дальнего Востока</span>
-        <h1>Прогноз по {region.name_prepositional}</h1>
+        <span className="eyebrow">Погода ДФО и СФО</span>
+        <h1>Прогноз для {region.name_genitive}</h1>
         <p>
-          Основной часовой пояс: {region.primary_timezone}
+          {region.federal_district} · Основной часовой пояс:{" "}
+          {region.primary_timezone}
           {lastUpdated
             ? ` · Обновлено ${new Date(lastUpdated).toLocaleString("ru-RU", {
                 timeZone: region.primary_timezone,

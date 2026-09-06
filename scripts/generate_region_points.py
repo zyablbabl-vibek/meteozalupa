@@ -2,6 +2,7 @@
 
 Usage:
     python scripts/generate_region_points.py /path/to/RU.txt
+    python scripts/generate_region_points.py /path/to/RU.txt siberian
 
 The generated files intentionally contain only published populated-place
 coordinates. Selection combines the largest settlements with geographic
@@ -20,20 +21,35 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 OUTPUT = ROOT / "data" / "regions"
-VERIFIED_AT = date(2026, 7, 31).isoformat()
+VERIFIED_AT = date.today().isoformat()
 SOURCE_URL = "https://download.geonames.org/export/dump/RU.zip"
+FAR_EAST_DISTRICT = "Дальневосточный федеральный округ"
+SIBERIAN_DISTRICT = "Сибирский федеральный округ"
 CENTER_NAMES = {
     "Anadyr": "Анадырь",
     "Birobidzhan": "Биробиджан",
     "Blagoveshchensk": "Благовещенск",
     "Chita": "Чита",
     "Khabarovsk": "Хабаровск",
+    "Kemerovo": "Кемерово",
+    "Krasnoyarsk": "Красноярск",
+    "Kyzyl": "Кызыл",
     "Magadan": "Магадан",
+    "Novosibirsk": "Новосибирск",
+    "Omsk": "Омск",
     "Petropavlovsk-Kamchatsky": "Петропавловск-Камчатский",
     "Ulan-Ude": "Улан-Удэ",
     "Vladivostok": "Владивосток",
     "Yakutsk": "Якутск",
     "Yuzhno-Sakhalinsk": "Южно-Сахалинск",
+    "Abakan": "Абакан",
+    "Barnaul": "Барнаул",
+    "Gorno-Altaysk": "Горно-Алтайск",
+    "Irkutsk": "Иркутск",
+    "Tomsk": "Томск",
+}
+KNOWN_NAMES = {
+    "Novokuznetsk": "Новокузнецк",
 }
 
 
@@ -47,8 +63,9 @@ class Region:
     center_ascii: str
     primary_timezone: str
     count: int
-    center: tuple[float, float]
+    center: tuple[float, float] | None
     zoom: float
+    federal_district: str = FAR_EAST_DISTRICT
 
 
 REGIONS = (
@@ -184,6 +201,136 @@ REGIONS = (
         (66.8, 172.0),
         4,
     ),
+    Region(
+        "altai-republic",
+        "Республика Алтай",
+        "Республике Алтай",
+        "Республики Алтай",
+        "03",
+        "Gorno-Altaysk",
+        "Asia/Barnaul",
+        16,
+        None,
+        6,
+        SIBERIAN_DISTRICT,
+    ),
+    Region(
+        "altai-krai",
+        "Алтайский край",
+        "Алтайском крае",
+        "Алтайского края",
+        "04",
+        "Barnaul",
+        "Asia/Barnaul",
+        22,
+        None,
+        5.5,
+        SIBERIAN_DISTRICT,
+    ),
+    Region(
+        "tyva-republic",
+        "Республика Тыва",
+        "Республике Тыва",
+        "Республики Тыва",
+        "79",
+        "Kyzyl",
+        "Asia/Krasnoyarsk",
+        18,
+        None,
+        5.5,
+        SIBERIAN_DISTRICT,
+    ),
+    Region(
+        "khakassia-republic",
+        "Республика Хакасия",
+        "Республике Хакасия",
+        "Республики Хакасия",
+        "31",
+        "Abakan",
+        "Asia/Krasnoyarsk",
+        15,
+        None,
+        6,
+        SIBERIAN_DISTRICT,
+    ),
+    Region(
+        "krasnoyarsk-krai",
+        "Красноярский край",
+        "Красноярском крае",
+        "Красноярского края",
+        "91",
+        "Krasnoyarsk",
+        "Asia/Krasnoyarsk",
+        35,
+        None,
+        3.5,
+        SIBERIAN_DISTRICT,
+    ),
+    Region(
+        "irkutsk-oblast",
+        "Иркутская область",
+        "Иркутской области",
+        "Иркутской области",
+        "20",
+        "Irkutsk",
+        "Asia/Irkutsk",
+        25,
+        None,
+        4.5,
+        SIBERIAN_DISTRICT,
+    ),
+    Region(
+        "kemerovo-oblast-kuzbass",
+        "Кемеровская область — Кузбасс",
+        "Кемеровской области — Кузбассе",
+        "Кемеровской области — Кузбасса",
+        "29",
+        "Kemerovo",
+        "Asia/Novokuznetsk",
+        20,
+        None,
+        6,
+        SIBERIAN_DISTRICT,
+    ),
+    Region(
+        "novosibirsk-oblast",
+        "Новосибирская область",
+        "Новосибирской области",
+        "Новосибирской области",
+        "53",
+        "Novosibirsk",
+        "Asia/Novosibirsk",
+        20,
+        None,
+        5.5,
+        SIBERIAN_DISTRICT,
+    ),
+    Region(
+        "omsk-oblast",
+        "Омская область",
+        "Омской области",
+        "Омской области",
+        "54",
+        "Omsk",
+        "Asia/Omsk",
+        20,
+        None,
+        5.5,
+        SIBERIAN_DISTRICT,
+    ),
+    Region(
+        "tomsk-oblast",
+        "Томская область",
+        "Томской области",
+        "Томской области",
+        "75",
+        "Tomsk",
+        "Asia/Tomsk",
+        20,
+        None,
+        5,
+        SIBERIAN_DISTRICT,
+    ),
 )
 
 RUSSIAN_TO_LATIN = {
@@ -233,18 +380,14 @@ def transliterate(value: str) -> str:
 
 def russian_name(ascii_name: str, alternatives: str) -> str:
     candidates = [
-        value
-        for value in alternatives.split(",")
-        if re.fullmatch(r"[А-Яа-яЁё .()'’\\-]+", value)
+        value for value in alternatives.split(",") if re.fullmatch(r"[А-Яа-яЁё .()'’\\-]+", value)
     ]
     if not candidates:
         return ascii_name
     target = normalized(ascii_name)
     return max(
         candidates,
-        key=lambda value: SequenceMatcher(
-            None, target, normalized(transliterate(value))
-        ).ratio(),
+        key=lambda value: SequenceMatcher(None, target, normalized(transliterate(value))).ratio(),
     )
 
 
@@ -281,20 +424,21 @@ def load(path: Path) -> dict[str, list[dict]]:
 
 
 def choose(candidates: list[dict], region: Region) -> list[dict]:
-    unique_coordinates = {
-        (item["latitude"], item["longitude"]): item for item in candidates
-    }
+    unique_coordinates = {(item["latitude"], item["longitude"]): item for item in candidates}
     pool = list(unique_coordinates.values())
     pool.sort(key=lambda item: item["population"], reverse=True)
     center = next(
-        item
-        for item in pool
-        if normalized(item["ascii_name"]) == normalized(region.center_ascii)
+        item for item in pool if normalized(item["ascii_name"]) == normalized(region.center_ascii)
     )
     selected = [center]
 
     def add(item: dict) -> None:
-        if item not in selected:
+        is_near_existing = any(
+            abs(item["latitude"] - existing["latitude"]) < 0.02
+            and abs(item["longitude"] - existing["longitude"]) < 0.02
+            for existing in selected
+        )
+        if item not in selected and not is_near_existing:
             selected.append(item)
 
     # Reserve roughly one third of the fixture for geographic coverage.
@@ -311,12 +455,33 @@ def choose(candidates: list[dict], region: Region) -> list[dict]:
     return selected[: region.count]
 
 
-def main(source: Path) -> None:
+def main(source: Path, district: str | None = None) -> None:
     by_admin = load(source)
     OUTPUT.mkdir(parents=True, exist_ok=True)
-    registry = []
+    selected_regions = [
+        region
+        for region in REGIONS
+        if district is None
+        or (district == "siberian" and region.federal_district == SIBERIAN_DISTRICT)
+        or (district == "far-east" and region.federal_district == FAR_EAST_DISTRICT)
+    ]
+    if not selected_regions:
+        raise SystemExit(f"Unknown or empty district selector: {district}")
+
+    registry_path = OUTPUT / "regions.json"
+    existing_registry = (
+        json.loads(registry_path.read_text(encoding="utf-8"))["regions"]
+        if registry_path.exists() and district is not None
+        else []
+    )
+    selected_ids = {region.id for region in selected_regions}
+    registry = [item for item in existing_registry if item["id"] not in selected_ids]
     used_ids: set[str] = set()
-    for region in REGIONS:
+    for item in registry:
+        payload = json.loads((OUTPUT / f"{item['id']}.json").read_text(encoding="utf-8"))
+        used_ids.update(point["id"] for point in payload["points"])
+
+    for region in selected_regions:
         chosen = choose(by_admin[region.admin_code], region)
         points = []
         for item in chosen:
@@ -331,13 +496,15 @@ def main(source: Path) -> None:
                     "name": (
                         CENTER_NAMES[region.center_ascii]
                         if item is chosen[0]
-                        else item["name"]
+                        else KNOWN_NAMES.get(item["ascii_name"], item["name"])
                     ),
                     "latitude": item["latitude"],
                     "longitude": item["longitude"],
                     "timezone": item["timezone"],
                     "point_type": (
-                        "city" if item["feature_code"] in {"PPLA", "PPLA2", "PPLC"} else "settlement"
+                        "city"
+                        if item["feature_code"] in {"PPLA", "PPLA2", "PPLC"}
+                        else "settlement"
                     ),
                     "is_regional_center": item is chosen[0],
                     "weight": 1.0,
@@ -357,6 +524,12 @@ def main(source: Path) -> None:
             json.dumps(payload, ensure_ascii=False, indent=2) + "\n",
             encoding="utf-8",
         )
+        map_center = region.center or (
+            (min(item["latitude"] for item in chosen) + max(item["latitude"] for item in chosen))
+            / 2,
+            (min(item["longitude"] for item in chosen) + max(item["longitude"] for item in chosen))
+            / 2,
+        )
         registry.append(
             {
                 "id": region.id,
@@ -364,24 +537,25 @@ def main(source: Path) -> None:
                 "short_name": region.name,
                 "name_prepositional": region.name_prepositional,
                 "name_genitive": region.name_genitive,
-                "federal_district": "Дальневосточный федеральный округ",
+                "federal_district": region.federal_district,
                 "primary_timezone": region.primary_timezone,
                 "default_point_id": default_point_id,
                 "map_center": {
-                    "latitude": region.center[0],
-                    "longitude": region.center[1],
+                    "latitude": round(map_center[0], 4),
+                    "longitude": round(map_center[1], 4),
                 },
                 "map_zoom": region.zoom,
                 "data_status": "partially_verified",
             }
         )
-    (OUTPUT / "regions.json").write_text(
+    registry.sort(key=lambda item: item["name"])
+    registry_path.write_text(
         json.dumps({"regions": registry}, ensure_ascii=False, indent=2) + "\n",
         encoding="utf-8",
     )
 
 
 if __name__ == "__main__":
-    if len(sys.argv) != 2:
-        raise SystemExit("Expected path to GeoNames RU.txt")
-    main(Path(sys.argv[1]))
+    if len(sys.argv) not in {2, 3}:
+        raise SystemExit("Expected path to GeoNames RU.txt and optional district selector")
+    main(Path(sys.argv[1]), sys.argv[2] if len(sys.argv) == 3 else None)

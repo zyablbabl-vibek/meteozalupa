@@ -1,4 +1,5 @@
 import json
+from collections import Counter
 from pathlib import Path
 
 from app.config.settings import settings
@@ -9,8 +10,16 @@ def validate_region_data() -> list[str]:
     errors: list[str] = []
     regions = list(list_regions())
     ids = [region.id for region in regions]
-    if len(regions) != 11:
-        errors.append(f"Registry must contain 11 regions, got {len(regions)}")
+    expected_districts = {
+        "Дальневосточный федеральный округ": 11,
+        "Сибирский федеральный округ": 10,
+    }
+    actual_districts = Counter(region.federal_district for region in regions)
+    if actual_districts != expected_districts:
+        errors.append(
+            f"Unexpected federal district coverage: {dict(actual_districts)}; "
+            f"expected {expected_districts}"
+        )
     if len(ids) != len(set(ids)):
         errors.append("Region ids are not unique")
 

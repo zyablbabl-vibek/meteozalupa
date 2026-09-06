@@ -3,13 +3,13 @@ import { describe, expect, it, vi } from "vitest";
 import type { Region } from "../types/weather";
 import { RegionPicker } from "./RegionPicker";
 
-const region = (id: string, name: string): Region => ({
+const region = (id: string, name: string, federalDistrict: string): Region => ({
   id,
   name,
   short_name: name,
   name_prepositional: name,
   name_genitive: name,
-  federal_district: "Дальневосточный федеральный округ",
+  federal_district: federalDistrict,
   primary_timezone: "Asia/Yakutsk",
   has_multiple_timezones: false,
   default_point_id: `${id}-center`,
@@ -22,9 +22,9 @@ const region = (id: string, name: string): Region => ({
 });
 
 describe("RegionPicker", () => {
-  it("shows all 11 regions and reports selection", () => {
+  it("groups all 21 regions by federal district and reports selection", () => {
     const onChange = vi.fn();
-    const regions = [
+    const farEast = [
       "Амурская область",
       "Еврейская автономная область",
       "Забайкальский край",
@@ -36,17 +36,33 @@ describe("RegionPicker", () => {
       "Сахалинская область",
       "Хабаровский край",
       "Чукотский автономный округ",
-    ].map((name, index) => region(`region-${index}`, name));
-    render(
-      <RegionPicker regions={regions} value="region-0" onChange={onChange} />,
+    ].map((name, index) =>
+      region(`far-east-${index}`, name, "Дальневосточный федеральный округ"),
     );
-    expect(screen.getAllByRole("option")).toHaveLength(11);
-    expect(
-      screen.getAllByRole("option").map((option) => option.textContent),
-    ).toEqual(regions.map((item) => item.name));
-    fireEvent.change(screen.getByLabelText("Регион Дальнего Востока"), {
-      target: { value: "region-5" },
+    const siberia = [
+      "Алтайский край",
+      "Иркутская область",
+      "Кемеровская область — Кузбасс",
+      "Красноярский край",
+      "Новосибирская область",
+      "Омская область",
+      "Республика Алтай",
+      "Республика Тыва",
+      "Республика Хакасия",
+      "Томская область",
+    ].map((name, index) =>
+      region(`siberia-${index}`, name, "Сибирский федеральный округ"),
+    );
+    const regions = [...farEast, ...siberia];
+    render(
+      <RegionPicker regions={regions} value="far-east-0" onChange={onChange} />,
+    );
+    expect(screen.getAllByRole("option")).toHaveLength(21);
+    expect(screen.getByRole("group", { name: /Дальневосточный/ })).toBeTruthy();
+    expect(screen.getByRole("group", { name: /Сибирский/ })).toBeTruthy();
+    fireEvent.change(screen.getByLabelText("Регион России"), {
+      target: { value: "siberia-3" },
     });
-    expect(onChange).toHaveBeenCalledWith("region-5");
+    expect(onChange).toHaveBeenCalledWith("siberia-3");
   });
 });

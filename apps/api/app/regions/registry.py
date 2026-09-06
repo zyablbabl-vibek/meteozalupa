@@ -75,4 +75,3 @@ def validate_timezone(value: str) -> bool:
     except ZoneInfoNotFoundError:
         return False
     return True
-

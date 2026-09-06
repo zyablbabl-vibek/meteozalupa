@@ -7,9 +7,9 @@ from app.services.horizons import current_local_date, filter_dates, horizon_date
 
 
 def test_current_date_uses_yakutsk_timezone():
-    assert current_local_date(
-        "Asia/Yakutsk", datetime(2026, 7, 30, 16, 30, tzinfo=UTC)
-    ) == date(2026, 7, 31)
+    assert current_local_date("Asia/Yakutsk", datetime(2026, 7, 30, 16, 30, tzinfo=UTC)) == date(
+        2026, 7, 31
+    )
 
 
 @pytest.mark.parametrize(
