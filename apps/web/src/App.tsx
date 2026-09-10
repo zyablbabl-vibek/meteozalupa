@@ -163,6 +163,11 @@ export default function App() {
     queryFn: () => getForecast(region!.id, horizon, date),
     enabled: Boolean(region),
     retry: 1,
+    staleTime: 60_000,
+    gcTime: 6 * 60 * 60 * 1000,
+    refetchOnWindowFocus: false,
+    refetchInterval: (query) =>
+      query.state.data?.cache.revalidating ? 10_000 : false,
   });
   const geojson = useQuery({
     queryKey: ["region-geojson", region?.id],
@@ -173,12 +178,12 @@ export default function App() {
   const details = useQuery({
     queryKey: ["point", region?.id, selected, horizon, date],
     queryFn: () => getPointForecast(region!.id, selected!, horizon, date),
-    enabled: Boolean(region && selected) && view === "day",
+    enabled: Boolean(region && selected && forecast.data) && view === "day",
   });
   const insights = useQuery({
     queryKey: ["insights", region?.id, horizon, date],
     queryFn: () => getInsights(region!.id, horizon, date),
-    enabled: Boolean(region),
+    enabled: Boolean(region && forecast.data),
     retry: 1,
   });
   const refresh = useMutation({
@@ -302,6 +307,7 @@ export default function App() {
         region={region}
         lastUpdated={forecast.data?.last_updated}
         dataMode={forecast.data?.data_mode}
+        cache={forecast.data?.cache}
         modelAvailability={forecast.data?.model_availability}
         refreshing={refresh.isPending}
         onRegionChange={changeRegion}

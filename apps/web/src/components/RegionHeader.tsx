@@ -1,4 +1,4 @@
-import type { Region } from "../types/weather";
+import type { ForecastCache, Region } from "../types/weather";
 import { RegionPicker } from "./RegionPicker";
 
 export function RegionHeader({
@@ -6,6 +6,7 @@ export function RegionHeader({
   region,
   lastUpdated,
   dataMode,
+  cache,
   modelAvailability,
   refreshing,
   onRegionChange,
@@ -15,6 +16,7 @@ export function RegionHeader({
   region: Region;
   lastUpdated?: string;
   dataMode?: "mock" | "live";
+  cache?: ForecastCache;
   modelAvailability?: Record<string, boolean>;
   refreshing: boolean;
   onRegionChange: (regionId: string) => void;
@@ -66,6 +68,22 @@ export function RegionHeader({
             }
           >
             {dataMode === "mock" ? "Демо-данные" : "Live · Open-Meteo"}
+          </span>
+        )}
+        {cache && dataMode === "live" && (
+          <span
+            className={`cache-state ${cache.status}`}
+            title={
+              cache.persistent
+                ? "Прогноз хранится в постоянной PostgreSQL-базе"
+                : "Прогноз хранится во временном файле сервера"
+            }
+          >
+            {cache.revalidating
+              ? "Сохранённые данные · обновляем в фоне"
+              : cache.served_from === "cache"
+                ? "Загружено из хранилища"
+                : "Получено и сохранено"}
           </span>
         )}
       </div>

@@ -1,3 +1,8 @@
+databases:
+  - name: weather-consensus-db
+    plan: free
+    region: frankfurt
+
 services:
   - type: web
     name: weather-consensus-api
@@ -12,6 +17,8 @@ services:
         value: live
       - key: FORECAST_CACHE_TTL_SECONDS
         value: 10800
+      - key: FORECAST_RETENTION_PAST_DAYS
+        value: 0
       - key: DATABASE_URL
         value: sqlite:///./data/weather.db
       - key: LOG_LEVEL
@@ -55,8 +62,12 @@ services:
         value: live
       - key: FORECAST_CACHE_TTL_SECONDS
         value: 10800
+      - key: FORECAST_RETENTION_PAST_DAYS
+        value: 0
       - key: DATABASE_URL
-        value: sqlite:///./data/weather.db
+        fromDatabase:
+          name: weather-consensus-db
+          property: connectionString
       - key: LOG_LEVEL
         value: INFO
       - key: OPEN_METEO_BATCH_SIZE

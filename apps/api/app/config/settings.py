@@ -17,6 +17,8 @@ LOCAL_CORS_ORIGINS = ",".join(
 class Settings(BaseSettings):
     data_mode: Literal["mock", "live"] = "live"
     forecast_cache_ttl_seconds: int = 10800
+    forecast_retention_past_days: int = 0
+    store_raw_responses: bool = False
     database_url: str = "sqlite:///./data/weather.db"
     log_level: str = "INFO"
     cors_origins: str = LOCAL_CORS_ORIGINS
@@ -46,9 +48,7 @@ class Settings(BaseSettings):
     @property
     def allowed_cors_origins(self) -> list[str]:
         return [
-            origin.strip().rstrip("/")
-            for origin in self.cors_origins.split(",")
-            if origin.strip()
+            origin.strip().rstrip("/") for origin in self.cors_origins.split(",") if origin.strip()
         ]
 
     model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore")

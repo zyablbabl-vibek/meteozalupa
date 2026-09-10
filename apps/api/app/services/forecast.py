@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import math
 import statistics
 from collections import defaultdict
@@ -9,7 +10,7 @@ import httpx
 
 from app.config.models import MODELS
 from app.config.settings import settings
-from app.db.database import load_fresh, save
+from app.db.database import load_cached, prune_past, save, storage_backend
 from app.providers.ecmwf import EcmwfProvider
 from app.providers.gfs import GfsProvider
 from app.providers.icon import IconProvider
@@ -28,6 +29,11 @@ from app.statistics.events import (
 MODEL_LABELS = tuple(model.label for model in MODELS.values())
 refresh_lock = asyncio.Lock()
 region_load_locks: dict[str, asyncio.Lock] = {}
+region_refresh_tasks: dict[str, asyncio.Task[None]] = {}
+region_refresh_attempts: dict[str, datetime] = {}
+region_pruned_dates: dict[str, date] = {}
+CacheMetadata = dict[str, object]
+logger = logging.getLogger(__name__)
 
 
 def _region_load_lock(region_id: str) -> asyncio.Lock:
@@ -38,18 +44,80 @@ def _region_load_lock(region_id: str) -> asyncio.Lock:
     return lock
 
 
+def _model_has_complete_coverage(
+    records: list[ForecastRecord], model: str, region_id: str, start: date, end: date
+) -> bool:
+    expected_dates = {start + timedelta(days=offset) for offset in range((end - start).days + 1)}
+    expected = {(point.id, day) for point in points(region_id) for day in expected_dates}
+    actual = {(record.point_id, record.local_date) for record in records if record.model == model}
+    return expected <= actual
+
+
 def _complete_cache(
-    records: list[ForecastRecord], start: date, end: date
+    records: list[ForecastRecord], region_id: str, start: date, end: date
 ) -> list[ForecastRecord] | None:
-    expected_dates = {
-        start + timedelta(days=offset) for offset in range((end - start).days + 1)
-    }
-    dates_by_model: dict[str, set[date]] = defaultdict(set)
-    for record in records:
-        dates_by_model[record.model].add(record.local_date)
-    if all(expected_dates <= dates_by_model[model] for model in MODEL_LABELS):
+    if all(
+        _model_has_complete_coverage(records, model, region_id, start, end)
+        for model in MODEL_LABELS
+    ):
         return records
     return None
+
+
+def _model_is_fresh(records: list[ForecastRecord], model: str, cutoff: datetime) -> bool:
+    model_records = [record for record in records if record.model == model]
+    return bool(model_records) and min(record.fetched_at for record in model_records) >= cutoff
+
+
+def _needed_ranges(
+    records: list[ForecastRecord], region_id: str, start: date, end: date, force: bool = False
+) -> dict[str, tuple[date, date]]:
+    cutoff = datetime.now(UTC) - timedelta(seconds=settings.forecast_cache_ttl_seconds)
+    result: dict[str, tuple[date, date]] = {}
+    region_point_ids = {point.id for point in points(region_id)}
+    for model in MODEL_LABELS:
+        if force:
+            result[model] = (start, end)
+            continue
+        model_records = [record for record in records if record.model == model]
+        covered_dates = {
+            day
+            for day in (start + timedelta(days=offset) for offset in range((end - start).days + 1))
+            if region_point_ids
+            <= {record.point_id for record in model_records if record.local_date == day}
+        }
+        expected_dates = {
+            start + timedelta(days=offset) for offset in range((end - start).days + 1)
+        }
+        missing_dates = expected_dates - covered_dates
+        if missing_dates:
+            result[model] = (min(missing_dates), max(missing_dates))
+        elif not _model_is_fresh(records, model, cutoff):
+            # Existing forecast values can change after a new model run, so stale
+            # future data is refreshed even when every date is already present.
+            result[model] = (start, end)
+    return result
+
+
+def _cache_metadata(
+    records: list[ForecastRecord], status: str, served_from: str, revalidating: bool
+) -> CacheMetadata:
+    last_updated = max((record.fetched_at for record in records), default=None)
+    oldest_update = min((record.fetched_at for record in records), default=None)
+    expires_at = (
+        oldest_update + timedelta(seconds=settings.forecast_cache_ttl_seconds)
+        if oldest_update
+        else None
+    )
+    return {
+        "status": status,
+        "served_from": served_from,
+        "storage": storage_backend(),
+        "persistent": storage_backend() == "postgresql",
+        "revalidating": revalidating,
+        "last_updated": last_updated,
+        "expires_at": expires_at,
+    }
 
 
 def points(region_id: str) -> list[Point]:
@@ -143,40 +211,121 @@ def mock_records(
     return result
 
 
+async def _fetch_ranges(region_id: str, ranges: dict[str, tuple[date, date]]) -> list[str]:
+    if not ranges:
+        return []
+    region = get_region(region_id)
+    fetched_records: list[ForecastRecord] = []
+    raw: dict[str, list[dict]] = {}
+    errors: list[str] = []
+    async with httpx.AsyncClient(
+        limits=httpx.Limits(max_connections=settings.open_meteo_max_concurrency)
+    ) as client:
+        providers = [EcmwfProvider(client), GfsProvider(client), IconProvider(client)]
+        selected = [provider for provider in providers if provider.config.label in ranges]
+        results = await asyncio.gather(
+            *(
+                provider.fetch(
+                    points(region_id),
+                    ranges[provider.config.label][0] - timedelta(days=1),
+                    ranges[provider.config.label][1] + timedelta(days=1),
+                )
+                for provider in selected
+            ),
+            return_exceptions=True,
+        )
+        for provider, result in zip(selected, results, strict=True):
+            if isinstance(result, BaseException):
+                errors.append(f"{provider.config.label}: {result}")
+                continue
+            provider_records, provider_raw = result
+            range_start, range_end = ranges[provider.config.label]
+            fetched_records.extend(
+                record
+                for record in provider_records
+                if range_start <= record.local_date <= range_end
+            )
+            raw[provider.config.label] = provider_raw
+    if fetched_records:
+        save(
+            region_id,
+            min(start for start, _ in ranges.values()),
+            fetched_records,
+            raw,
+            region.primary_timezone,
+            "live",
+        )
+    return errors
+
+
+async def _refresh_region(region_id: str, start: date, end: date) -> None:
+    async with _region_load_lock(region_id):
+        cached = load_cached(region_id, start, end, settings.data_mode)
+        await _fetch_ranges(region_id, _needed_ranges(cached, region_id, start, end))
+
+
+def _schedule_refresh(region_id: str, start: date, end: date) -> bool:
+    running = region_refresh_tasks.get(region_id)
+    if running is not None and not running.done():
+        return True
+    last_attempt = region_refresh_attempts.get(region_id)
+    cooldown = timedelta(seconds=60)
+    if last_attempt is not None and datetime.now(UTC) - last_attempt < cooldown:
+        return False
+    region_refresh_attempts[region_id] = datetime.now(UTC)
+    task = asyncio.create_task(_refresh_region(region_id, start, end))
+    region_refresh_tasks[region_id] = task
+
+    def discard(completed: asyncio.Task[None]) -> None:
+        if region_refresh_tasks.get(region_id) is completed:
+            region_refresh_tasks.pop(region_id, None)
+        try:
+            completed.result()
+        except Exception:
+            logger.exception("Background forecast refresh failed for region %s", region_id)
+
+    task.add_done_callback(discard)
+    return True
+
+
+def _prune_region_once_per_day(region_id: str, today: date) -> None:
+    if region_pruned_dates.get(region_id) == today:
+        return
+    region_pruned_dates[region_id] = today
+    prune_past(region_id, today, settings.forecast_retention_past_days)
+
+
 async def get_records(
     region_id: str, force: bool = False
-) -> tuple[list[ForecastRecord], list[str]]:
+) -> tuple[list[ForecastRecord], list[str], CacheMetadata]:
     region = get_region(region_id)
     start = current_local_date(region.primary_timezone)
     end = start + timedelta(days=6)
-    if not force:
-        cached = _complete_cache(
-            load_fresh(
-                region_id,
-                start,
-                settings.forecast_cache_ttl_seconds,
-                settings.data_mode,
-            ),
-            start,
-            end,
+    _prune_region_once_per_day(region_id, start)
+    cached = load_cached(region_id, start, end, settings.data_mode)
+
+    if not force and cached:
+        needed = _needed_ranges(cached, region_id, start, end)
+        if not needed:
+            return cached, [], _cache_metadata(cached, "fresh", "cache", False)
+        revalidating = _schedule_refresh(region_id, start, end)
+        status = (
+            "stale" if _complete_cache(cached, region_id, start, end) is not None else "partial"
         )
-        if cached is not None:
-            return cached, []
+        return cached, [], _cache_metadata(cached, status, "cache", revalidating)
 
     async with _region_load_lock(region_id):
-        if not force:
-            cached = _complete_cache(
-                load_fresh(
-                    region_id,
-                    start,
-                    settings.forecast_cache_ttl_seconds,
-                    settings.data_mode,
-                ),
-                start,
-                end,
+        cached = load_cached(region_id, start, end, settings.data_mode)
+        if not force and cached:
+            needed = _needed_ranges(cached, region_id, start, end)
+            if not needed:
+                return cached, [], _cache_metadata(cached, "fresh", "cache", False)
+            revalidating = _schedule_refresh(region_id, start, end)
+            status = (
+                "stale" if _complete_cache(cached, region_id, start, end) is not None else "partial"
             )
-            if cached is not None:
-                return cached, []
+            return cached, [], _cache_metadata(cached, status, "cache", revalidating)
+
         if settings.data_mode == "mock":
             mock_data = mock_records(region_id, start, end)
             save(
@@ -187,37 +336,16 @@ async def get_records(
                 region.primary_timezone,
                 "mock",
             )
-            return mock_data, []
-        errors: list[str] = []
-        records: list[ForecastRecord] = []
-        raw: dict[str, list[dict]] = {}
-        async with httpx.AsyncClient(
-            limits=httpx.Limits(max_connections=settings.open_meteo_max_concurrency)
-        ) as client:
-            providers = [EcmwfProvider(client), GfsProvider(client), IconProvider(client)]
-            results = await asyncio.gather(
-                *(
-                    provider.fetch(
-                        points(region_id),
-                        start - timedelta(days=1),
-                        end + timedelta(days=1),
-                    )
-                    for provider in providers
-                ),
-                return_exceptions=True,
-            )
-            for provider, result in zip(providers, results, strict=True):
-                if isinstance(result, BaseException):
-                    errors.append(f"{provider.config.label}: {result}")
-                else:
-                    provider_records, provider_raw = result
-                    records.extend(
-                        record for record in provider_records if start <= record.local_date <= end
-                    )
-                    raw[provider.config.label] = provider_raw
-        if records:
-            save(region_id, start, records, raw, region.primary_timezone, "live")
-        return records, errors
+            return mock_data, [], _cache_metadata(mock_data, "refreshed", "generated", False)
+
+        ranges = _needed_ranges(cached, region_id, start, end, force=force)
+        errors = await _fetch_ranges(region_id, ranges)
+        records = load_cached(region_id, start, end, settings.data_mode)
+        still_needed = _needed_ranges(records, region_id, start, end)
+        complete = _complete_cache(records, region_id, start, end) is not None
+        status = "refreshed" if complete and not still_needed else "partial"
+        revalidating = bool(records and still_needed and _schedule_refresh(region_id, start, end))
+        return records, errors, _cache_metadata(records, status, "open_meteo", revalidating)
 
 
 def hourly(records: list[ForecastRecord], metric: str) -> list[dict]:

@@ -111,7 +111,7 @@ async def forecast(
 ) -> dict:
     region, selected_horizon, dates, selected_date = context(region_id, horizon, date)
     validate_metric(metric)
-    all_records, warnings = await get_records(region_id)
+    all_records, warnings, cache = await get_records(region_id)
     selected_records = filter_dates(all_records, [selected_date])
     return {
         "region": region,
@@ -130,6 +130,7 @@ async def forecast(
             for model in MODELS.values()
         },
         "warnings": warnings,
+        "cache": cache,
         "last_updated": max((record.fetched_at for record in all_records), default=None),
         "points": point_summaries(selected_records),
         "hourly": hourly(selected_records, metric),
@@ -149,7 +150,7 @@ async def point_forecast(
     point = next((item for item in points(region_id) if item.id == point_id), None)
     if point is None:
         raise HTTPException(404, "Контрольная точка не принадлежит выбранному региону")
-    all_records, warnings = await get_records(region_id)
+    all_records, warnings, _ = await get_records(region_id)
     period_records = [
         record for record in filter_dates(all_records, dates) if record.point_id == point_id
     ]
@@ -178,7 +179,7 @@ async def summary(
     date: DateQuery = None,
 ) -> dict:
     region, selected_horizon, dates, selected_date = context(region_id, horizon, date)
-    records, warnings = await get_records(region_id)
+    records, warnings, _ = await get_records(region_id)
     selected_records = filter_dates(records, [selected_date])
     selected_points = point_summaries(selected_records)
     if not selected_points:
@@ -214,7 +215,7 @@ async def insights(
         raise HTTPException(
             422, "Неизвестная category. Допустимые значения: all, precipitation, wind"
         )
-    records, _ = await get_records(region_id)
+    records, _, _ = await get_records(region_id)
     result = build_insights(records, dates, selected_date, region.primary_timezone)
     empty = {"items": [], "total": 0}
     return {
@@ -239,7 +240,7 @@ async def refresh(region_id: RegionQuery = DEFAULT_REGION_ID) -> dict:
     if refresh_lock.locked():
         raise HTTPException(409, "Обновление уже выполняется")
     async with refresh_lock:
-        records, warnings = await get_records(region_id, force=True)
+        records, warnings, cache = await get_records(region_id, force=True)
     dates = sorted({record.local_date for record in records})
     return {
         "status": "updated",
@@ -248,6 +249,7 @@ async def refresh(region_id: RegionQuery = DEFAULT_REGION_ID) -> dict:
         "period_start": dates[0] if dates else None,
         "period_end": dates[-1] if dates else None,
         "warnings": warnings,
+        "cache": cache,
     }
 
 

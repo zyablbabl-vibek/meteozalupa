@@ -8,16 +8,38 @@ import type {
 import type { GeoJsonObject } from "geojson";
 
 const BASE = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+const REQUEST_TIMEOUT_MS = 90_000;
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(`${BASE}${path}`, init);
-  if (!response.ok) {
-    const payload = await response.json().catch(() => ({}));
-    throw new Error(
-      payload.detail || payload.error?.message || "Сервис прогноза недоступен",
-    );
+  const controller = new AbortController();
+  const timeout = window.setTimeout(
+    () => controller.abort(),
+    REQUEST_TIMEOUT_MS,
+  );
+  try {
+    const response = await fetch(`${BASE}${path}`, {
+      ...init,
+      signal: controller.signal,
+    });
+    if (!response.ok) {
+      const payload = await response.json().catch(() => ({}));
+      throw new Error(
+        payload.detail ||
+          payload.error?.message ||
+          "Сервис прогноза недоступен",
+      );
+    }
+    return response.json();
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") {
+      throw new Error(
+        "Сервер не ответил за 90 секунд. Повторите запрос — сохранённые данные не потеряны.",
+      );
+    }
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
   }
-  return response.json();
 }
 
 const params = (regionId: string, horizon: Horizon, date?: string) => {

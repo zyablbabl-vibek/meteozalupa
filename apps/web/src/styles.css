@@ -31,6 +31,8 @@ header {
 }
 .header-actions {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: end;
   gap: 12px;
 }
@@ -57,6 +59,21 @@ header {
 }
 .header-actions .mode {
   align-self: center;
+}
+.cache-state {
+  max-width: 190px;
+  align-self: center;
+  padding: 7px 9px;
+  border: 1px solid #54777a;
+  border-radius: 7px;
+  color: #d6e7e3;
+  font-size: 0.66rem;
+  line-height: 1.35;
+}
+.cache-state.stale,
+.cache-state.partial {
+  border-color: #d6aa62;
+  color: #ffe2a8;
 }
 .header-models {
   display: grid;

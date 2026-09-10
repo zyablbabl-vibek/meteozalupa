@@ -2,6 +2,15 @@ export type Horizon = "today" | "3d" | "7d";
 export type Section = "temperature" | "precipitation" | "wind";
 export type View = "day" | "period";
 export type DataStatus = "verified" | "partially_verified" | "demo";
+export type ForecastCache = {
+  status: "fresh" | "stale" | "partial" | "refreshed";
+  served_from: "cache" | "open_meteo" | "generated";
+  storage: "sqlite" | "postgresql";
+  persistent: boolean;
+  revalidating: boolean;
+  last_updated: string | null;
+  expires_at: string | null;
+};
 export type Region = {
   id: string;
   name: string;
@@ -181,6 +190,7 @@ export type Forecast = {
   data_mode: "mock" | "live";
   model_availability: Record<string, boolean>;
   warnings: string[];
+  cache: ForecastCache;
   last_updated: string;
   points: PointSummary[];
   hourly: Hourly[];
