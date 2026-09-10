@@ -4,6 +4,14 @@ from typing import Literal
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 ROOT = Path(__file__).resolve().parents[4]
+LOCAL_CORS_ORIGINS = ",".join(
+    (
+        "http://localhost:3000",
+        "http://localhost:5173",
+        "http://127.0.0.1:3000",
+        "http://127.0.0.1:5173",
+    )
+)
 
 
 class Settings(BaseSettings):
@@ -11,6 +19,7 @@ class Settings(BaseSettings):
     forecast_cache_ttl_seconds: int = 10800
     database_url: str = "sqlite:///./data/weather.db"
     log_level: str = "INFO"
+    cors_origins: str = LOCAL_CORS_ORIGINS
     regions_data_dir: Path = ROOT / "data" / "regions"
     regions_registry_file: Path = ROOT / "data" / "regions" / "regions.json"
     regions_geojson_dir: Path = ROOT / "data" / "geo" / "regions"
@@ -33,6 +42,14 @@ class Settings(BaseSettings):
     wind_gust_range_attention_ms: float = 8
     wind_direction_disagreement_deg: float = 90
     wind_direction_change_attention_deg: float = 90
+
+    @property
+    def allowed_cors_origins(self) -> list[str]:
+        return [
+            origin.strip().rstrip("/")
+            for origin in self.cors_origins.split(",")
+            if origin.strip()
+        ]
 
     model_config = SettingsConfigDict(env_file=ROOT / ".env", extra="ignore")
 

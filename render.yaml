@@ -1,0 +1,43 @@
+services:
+  - type: web
+    name: weather-consensus-api
+    runtime: docker
+    plan: free
+    region: singapore
+    dockerContext: .
+    dockerfilePath: ./apps/api/Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: DATA_MODE
+        value: live
+      - key: FORECAST_CACHE_TTL_SECONDS
+        value: 10800
+      - key: DATABASE_URL
+        value: sqlite:///./data/weather.db
+      - key: LOG_LEVEL
+        value: INFO
+      - key: OPEN_METEO_BATCH_SIZE
+        value: 25
+      - key: OPEN_METEO_MAX_CONCURRENCY
+        value: 3
+      - key: CORS_ORIGINS
+        fromService:
+          type: web
+          name: weather-consensus-web
+          envVarKey: RENDER_EXTERNAL_URL
+
+  - type: web
+    name: weather-consensus-web
+    runtime: static
+    buildCommand: cd apps/web && npm ci && npm run build
+    staticPublishPath: ./apps/web/dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        fromService:
+          type: web
+          name: weather-consensus-api
+          envVarKey: RENDER_EXTERNAL_URL
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
