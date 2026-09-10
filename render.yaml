@@ -17,9 +17,9 @@ services:
       - key: LOG_LEVEL
         value: INFO
       - key: OPEN_METEO_BATCH_SIZE
-        value: 25
+        value: 1
       - key: OPEN_METEO_MAX_CONCURRENCY
-        value: 3
+        value: 1
       - key: CORS_ORIGINS
         fromService:
           type: web
