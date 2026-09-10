@@ -27,6 +27,29 @@ from app.statistics.events import (
 
 MODEL_LABELS = tuple(model.label for model in MODELS.values())
 refresh_lock = asyncio.Lock()
+region_load_locks: dict[str, asyncio.Lock] = {}
+
+
+def _region_load_lock(region_id: str) -> asyncio.Lock:
+    lock = region_load_locks.get(region_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        region_load_locks[region_id] = lock
+    return lock
+
+
+def _complete_cache(
+    records: list[ForecastRecord], start: date, end: date
+) -> list[ForecastRecord] | None:
+    expected_dates = {
+        start + timedelta(days=offset) for offset in range((end - start).days + 1)
+    }
+    dates_by_model: dict[str, set[date]] = defaultdict(set)
+    for record in records:
+        dates_by_model[record.model].add(record.local_date)
+    if all(expected_dates <= dates_by_model[model] for model in MODEL_LABELS):
+        return records
+    return None
 
 
 def points(region_id: str) -> list[Point]:
@@ -127,56 +150,74 @@ async def get_records(
     start = current_local_date(region.primary_timezone)
     end = start + timedelta(days=6)
     if not force:
-        cached = load_fresh(
-            region_id,
-            start,
-            settings.forecast_cache_ttl_seconds,
-            settings.data_mode,
-        )
-        cached_days = {record.local_date for record in cached}
-        if len(cached_days) == 7:
-            return cached, []
-    if settings.data_mode == "mock":
-        mock_data = mock_records(region_id, start, end)
-        save(
-            region_id,
-            start,
-            mock_data,
-            {"mock": [{"deterministic": True, "days": 7, "region_id": region_id}]},
-            region.primary_timezone,
-            "mock",
-        )
-        return mock_data, []
-    errors: list[str] = []
-    records: list[ForecastRecord] = []
-    raw: dict[str, list[dict]] = {}
-    async with httpx.AsyncClient(
-        limits=httpx.Limits(max_connections=settings.open_meteo_max_concurrency)
-    ) as client:
-        providers = [EcmwfProvider(client), GfsProvider(client), IconProvider(client)]
-        results = await asyncio.gather(
-            *(
-                provider.fetch(
-                    points(region_id),
-                    start - timedelta(days=1),
-                    end + timedelta(days=1),
-                )
-                for provider in providers
+        cached = _complete_cache(
+            load_fresh(
+                region_id,
+                start,
+                settings.forecast_cache_ttl_seconds,
+                settings.data_mode,
             ),
-            return_exceptions=True,
+            start,
+            end,
         )
-        for provider, result in zip(providers, results, strict=True):
-            if isinstance(result, BaseException):
-                errors.append(f"{provider.config.label}: {result}")
-            else:
-                provider_records, provider_raw = result
-                records.extend(
-                    record for record in provider_records if start <= record.local_date <= end
-                )
-                raw[provider.config.label] = provider_raw
-    if records:
-        save(region_id, start, records, raw, region.primary_timezone, "live")
-    return records, errors
+        if cached is not None:
+            return cached, []
+
+    async with _region_load_lock(region_id):
+        if not force:
+            cached = _complete_cache(
+                load_fresh(
+                    region_id,
+                    start,
+                    settings.forecast_cache_ttl_seconds,
+                    settings.data_mode,
+                ),
+                start,
+                end,
+            )
+            if cached is not None:
+                return cached, []
+        if settings.data_mode == "mock":
+            mock_data = mock_records(region_id, start, end)
+            save(
+                region_id,
+                start,
+                mock_data,
+                {"mock": [{"deterministic": True, "days": 7, "region_id": region_id}]},
+                region.primary_timezone,
+                "mock",
+            )
+            return mock_data, []
+        errors: list[str] = []
+        records: list[ForecastRecord] = []
+        raw: dict[str, list[dict]] = {}
+        async with httpx.AsyncClient(
+            limits=httpx.Limits(max_connections=settings.open_meteo_max_concurrency)
+        ) as client:
+            providers = [EcmwfProvider(client), GfsProvider(client), IconProvider(client)]
+            results = await asyncio.gather(
+                *(
+                    provider.fetch(
+                        points(region_id),
+                        start - timedelta(days=1),
+                        end + timedelta(days=1),
+                    )
+                    for provider in providers
+                ),
+                return_exceptions=True,
+            )
+            for provider, result in zip(providers, results, strict=True):
+                if isinstance(result, BaseException):
+                    errors.append(f"{provider.config.label}: {result}")
+                else:
+                    provider_records, provider_raw = result
+                    records.extend(
+                        record for record in provider_records if start <= record.local_date <= end
+                    )
+                    raw[provider.config.label] = provider_raw
+        if records:
+            save(region_id, start, records, raw, region.primary_timezone, "live")
+        return records, errors
 
 
 def hourly(records: list[ForecastRecord], metric: str) -> list[dict]:
